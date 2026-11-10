@@ -152,8 +152,8 @@ footer{gap:20px;flex-wrap:wrap}
 <div class="time-box" id="out-display">OUT: Ende</div>
 </div>
 <div class="transport">
-<button class="btn" onpointerdown="this.setPointerCapture(event.pointerId); startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">Zurückspulen</button>
-<button class="btn" onpointerdown="this.setPointerCapture(event.pointerId); startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">Vorspulen</button>
+<button class="btn" onpointerdown="this.focus(); this.setPointerCapture(event.pointerId); startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">Zurückspulen</button>
+<button class="btn" onpointerdown="this.focus(); this.setPointerCapture(event.pointerId); startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">Vorspulen</button>
 </div>
 <div class="export">
 <div>
