@@ -97,7 +97,7 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 <div class="export">
 <div>
 <h2>Auswahl sichern</h2>
-<p id="clip-durations" role="status">Runde: ? ? Match: ?</p>
+<p id="clip-durations" role="status">Runde: … · Match: …</p>
 </div>
 <div class="export-buttons">
 <button class="btn btn-green" onclick="cutVideo('round')">In Runde speichern</button>
@@ -282,18 +282,23 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
         }
         authenticate().catch(showAuthError);
 
+        let durationRequestGeneration = 0;
         async function loadClipDurations() {
+            const generation = ++durationRequestGeneration;
             const display = document.getElementById('clip-durations');
             try {
                 const response = await fetch('/api/clip-durations');
                 if (!response.ok) throw new Error();
                 const totals = await response.json();
+                if (generation !== durationRequestGeneration) return;
                 const format = seconds => {
                     const rounded = Math.round(seconds);
                     return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
                 };
-                display.textContent = `Runde: ${format(totals.round)} ? Match: ${format(totals.match)}`;
-            } catch { display.textContent = 'Clipl?ngen nicht verf?gbar'; }
+                display.textContent = `Runde: ${format(totals.round)} · Match: ${format(totals.match)}`;
+            } catch {
+                if (generation === durationRequestGeneration) display.textContent = 'Cliplängen nicht verfügbar';
+            }
         }
         socket.on('clip_durations_changed', loadClipDurations);
 
