@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const { createAccessControl } = require('./lib/auth');
+const { archiveRound } = require('./lib/round-reset');
 const BACKUP_DIR = 'C:/Live-Replays/Backups';
 
 // --- KONFIGURATION ---
@@ -31,6 +32,8 @@ const server = http.createServer(app);
 const io = new Server(server);
 const obs = new OBSWebSocket();
 const access = createAccessControl(CONTROL_TOKEN);
+const activeCuts = new Set();
+let resetInProgress = false;
 const publicDirectory = path.join(__dirname, 'public');
 const remoteCommands = new Set([
     'set-in', 'set-out', 'cut-round', 'cut-match', 'play-pause',
@@ -127,6 +130,11 @@ io.on('connection', (socket) => {
     });
 
     socket.on('cut_video', (data) => {
+        if (resetInProgress) {
+            socket.emit('cut_error', 'Während des Runden-Resets kann kein Schnitt gestartet werden.');
+            return;
+        }
+
         let cut;
         try {
             cut = validateCutRequest(data, RAW_DIR);
@@ -140,13 +148,15 @@ io.on('connection', (socket) => {
 
         console.log(`✂️ Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
 
-        execFile(ffmpegPath, buildFfmpegArgs(cut, outputFile), { windowsHide: true }, (error) => {
+        const child = execFile(ffmpegPath, buildFfmpegArgs(cut, outputFile), { windowsHide: true }, (error) => {
+            activeCuts.delete(child);
             if (error) {
                 socket.emit('cut_error', error.message);
                 return;
             }
             socket.emit('cut_success', { file: path.basename(outputFile), target: cut.target });
         });
+        activeCuts.add(child);
     });
 });
 
@@ -185,54 +195,48 @@ udpPort.on("message", function (oscMsg) {
     } else if (oscMsg.address === "/replay/seek/stop") {
         io.emit('remote_command', 'seek-stop');
     } else if (oscMsg.address === "/replay/reset") {
-        performRoundReset();
+        performRoundReset().catch(err => console.error('❌ Fehler beim Runden-Reset:', err.message));
     }
 });
 
 // --- RUNDEN-RESET & ARCHIVIERUNG ---
-function performRoundReset() {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const currentBackupPath = path.join(BACKUP_DIR, `Runde_${timestamp}`);
+async function performRoundReset() {
+    if (resetInProgress) {
+        const error = new Error('Ein Runden-Reset läuft bereits.');
+        error.statusCode = 409;
+        throw error;
+    }
+    if (activeCuts.size > 0) {
+        const error = new Error('Der Runden-Reset wartet auf laufende Video-Schnitte.');
+        error.statusCode = 409;
+        throw error;
+    }
 
-    console.log(`🧹 Starte Runden-Reset... Archiviere nach: ${currentBackupPath}`);
-
+    resetInProgress = true;
+    console.log('🧹 Starte Runden-Reset...');
     try {
-        // 1. Backup-Ordner für diese Runde erstellen
-        const rawBackup = path.join(currentBackupPath, 'Raw');
-        const roundBackup = path.join(currentBackupPath, 'Highlights_Round');
-        fs.mkdirSync(rawBackup, { recursive: true });
-        fs.mkdirSync(roundBackup, { recursive: true });
-
-        // 2. Roh-Clips verschieben (statt kopieren, damit der Ordner leer wird)
-        if (fs.existsSync(RAW_DIR)) {
-            fs.readdirSync(RAW_DIR).forEach(file => {
-                if (file.endsWith('.mp4')) {
-                    fs.renameSync(path.join(RAW_DIR, file), path.join(rawBackup, file));
-                }
-            });
-        }
-
-        // 3. Runden-Highlights verschieben (Match-Highlights bleiben unberührt!)
-        if (fs.existsSync(HIGHLIGHTS_ROUND)) {
-            fs.readdirSync(HIGHLIGHTS_ROUND).forEach(file => {
-                if (file.endsWith('.mp4')) {
-                    fs.renameSync(path.join(HIGHLIGHTS_ROUND, file), path.join(roundBackup, file));
-                }
-            });
-        }
-
-        // 4. Signal an alle verbundenen Web-Dashboards senden, um die UI zu leeren
+        const result = await archiveRound({
+            rawDirectory: RAW_DIR,
+            highlightsDirectory: HIGHLIGHTS_ROUND,
+            backupDirectory: BACKUP_DIR
+        });
         io.emit('reset_dashboard');
-        console.log('✅ Runden-Reset erfolgreich abgeschlossen!');
-    } catch (err) {
-        console.error('❌ Fehler beim Runden-Reset:', err.message);
+        console.log(`✅ Runden-Reset erfolgreich abgeschlossen: ${result.backupPath}`);
+        return result;
+    } finally {
+        resetInProgress = false;
     }
 }
 
 // HTTP-Route für das Web-Dashboard
-app.post('/api/reset-round', (req, res) => {
-    performRoundReset();
-    res.send('OK');
+app.post('/api/reset-round', async (_req, res) => {
+    try {
+        const result = await performRoundReset();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Fehler beim Runden-Reset:', error.message);
+        res.status(error.statusCode || 500).json({ error: error.message });
+    }
 });
 
 
