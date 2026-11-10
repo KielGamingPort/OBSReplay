@@ -76,7 +76,7 @@ dialog p{font-size:12px;margin:16px 0}
 dialog label{color:var(--text)}
 input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c1219;color:var(--text);border:1px solid #3d4b5b;border-radius:5px}
 #settings-status{color:var(--accent)}
-.dialog-actions{display:flex;gap:8px;margin-top:24px}
+.dialog-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
 
 @media(min-width:1500px){.layout{grid-template-columns:minmax(0,1fr) 380px}
 }
@@ -333,7 +333,11 @@ footer{gap:20px;flex-wrap:wrap}
             sessionStorage.setItem('replayControlToken', token);
             document.getElementById('login-retry').hidden = true;
             socket.connect();
-            await loadClipList();
+            try { await loadClipList(); }
+            catch (error) {
+                logMessage(error.message);
+                clipList.innerHTML = '<div class="empty-library">Clips konnten nicht geladen werden. Seite neu laden.</div>';
+            }
         }
 
         // Lädt alle Clips vom Server in die rechte Leiste
