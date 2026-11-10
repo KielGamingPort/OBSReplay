@@ -253,8 +253,15 @@
             document.getElementById('out-display').innerText = "OUT: Ende";
         }
 
-        function triggerReplay() { socket.emit('trigger_replay'); }
         socket.on('replay_error', (message) => logMessage(`OBS: ${message}`));
+        function triggerReplay() {
+            socket.emit('trigger_replay', (result) => {
+                if (!result?.ok) logMessage(`❌ OBS: ${result?.error || 'Unbekannter Fehler'}`);
+            });
+        }
+        socket.on('obs_status', (status) => {
+            logMessage(status.connected ? '✅ OBS verbunden' : `⚠️ OBS getrennt${status.error ? `: ${status.error}` : ''}`);
+        });
         socket.on('new_replay_available', (fileName) => {
             logMessage("🎥 Neuer Clip: " + fileName);
             if (!addClipToList(fileName)) return;
