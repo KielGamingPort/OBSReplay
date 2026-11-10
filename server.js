@@ -9,6 +9,7 @@ const fs = require('fs');
 const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const { createAccessControl } = require('./lib/auth');
 const { archiveRound } = require('./lib/round-reset');
+const { createReplaySaveGuard } = require('./lib/replay-save-guard');
 const BACKUP_DIR = 'C:/Live-Replays/Backups';
 
 // --- KONFIGURATION ---
@@ -33,7 +34,7 @@ const io = new Server(server);
 const obs = new OBSWebSocket();
 const access = createAccessControl(CONTROL_TOKEN);
 const activeCuts = new Set();
-let resetInProgress = false;
+const replaySaveGuard = createReplaySaveGuard(() => obs.call('SaveReplayBuffer'));
 const publicDirectory = path.join(__dirname, 'public');
 const remoteCommands = new Set([
     'set-in', 'set-out', 'cut-round', 'cut-match', 'play-pause',
@@ -75,10 +76,10 @@ io.use((socket, next) => {
 app.post('/api/save-buffer', async (req, res) => {
     console.log('🕹️ Stream Deck Befehl: Replay speichern');
     try {
-        await obs.call('SaveReplayBuffer');
+        await replaySaveGuard.saveReplay();
         res.send('OK');
     } catch (error) {
-        res.status(500).send(error.message);
+        res.status(error.statusCode || 500).send(error.message);
     }
 });
 // Universal-Route für alle anderen Stream Deck Buttons
@@ -126,11 +127,15 @@ chokidar.watch(RAW_DIR, {
 // --- WEB-DASHBOARD LOGIK ---
 io.on('connection', (socket) => {
     socket.on('trigger_replay', async () => {
-        try { await obs.call('SaveReplayBuffer'); } catch (err) { }
+        try {
+            await replaySaveGuard.saveReplay();
+        } catch (error) {
+            socket.emit('replay_error', error.message);
+        }
     });
 
     socket.on('cut_video', (data) => {
-        if (resetInProgress) {
+        if (replaySaveGuard.isResetInProgress()) {
             socket.emit('cut_error', 'Während des Runden-Resets kann kein Schnitt gestartet werden.');
             return;
         }
@@ -176,7 +181,7 @@ udpPort.on("message", function (oscMsg) {
 
     // Routen der OSC-Adressen zu unseren Funktionen
     if (oscMsg.address === "/replay/save") {
-        obs.call('SaveReplayBuffer').catch(err => console.error(err));
+        replaySaveGuard.saveReplay().catch(err => console.error(err));
     } else if (oscMsg.address === "/replay/in") {
         io.emit('remote_command', 'set-in');
     } else if (oscMsg.address === "/replay/out") {
@@ -201,18 +206,13 @@ udpPort.on("message", function (oscMsg) {
 
 // --- RUNDEN-RESET & ARCHIVIERUNG ---
 async function performRoundReset() {
-    if (resetInProgress) {
-        const error = new Error('Ein Runden-Reset läuft bereits.');
-        error.statusCode = 409;
-        throw error;
-    }
     if (activeCuts.size > 0) {
         const error = new Error('Der Runden-Reset wartet auf laufende Video-Schnitte.');
         error.statusCode = 409;
         throw error;
     }
 
-    resetInProgress = true;
+    replaySaveGuard.beginReset();
     console.log('🧹 Starte Runden-Reset...');
     try {
         const result = await archiveRound({
@@ -224,7 +224,7 @@ async function performRoundReset() {
         console.log(`✅ Runden-Reset erfolgreich abgeschlossen: ${result.backupPath}`);
         return result;
     } finally {
-        resetInProgress = false;
+        replaySaveGuard.endReset();
     }
 }
 
