@@ -20,13 +20,16 @@ function ConvertTo-EnvironmentValue([string]$Value) {
     if ($Value.Contains("`r") -or $Value.Contains("`n")) {
         throw 'Konfigurationswerte dürfen keine Zeilenumbrüche enthalten.'
     }
-    if ($Value.Contains('"')) {
-        if ($Value.Contains("'")) {
-            throw 'Konfigurationswerte dürfen nicht gleichzeitig einfache und doppelte Anführungszeichen enthalten.'
+    # Node expands backslash-n/backslash-r inside double-quoted dotenv values.
+    foreach ($delimiter in @("'", '`', '"')) {
+        if (-not $Value.Contains($delimiter)) {
+            if ($delimiter -eq '"' -and ($Value.Contains('\n') -or $Value.Contains('\r'))) {
+                continue
+            }
+            return $delimiter + $Value + $delimiter
         }
-        return "'" + $Value + "'"
     }
-    return '"' + $Value + '"'
+    throw 'Konfigurationswert kann nicht verlustfrei als dotenv-Wert gespeichert werden.'
 }
 
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
