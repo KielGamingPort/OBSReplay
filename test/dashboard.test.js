@@ -18,11 +18,11 @@ for (const staleFailure of [false, true]) {
         const newer = vm.runInContext('loadClipDurations()', context);
         requests[1].resolve({ ok: true, json: async () => ({ round: 0, match: 3661 }) });
         await newer;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 · Map: 0:00:00');
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
         if (staleFailure) requests[0].reject(new Error('old failure'));
         else requests[0].resolve({ ok: true, json: async () => ({ round: 10, match: 20 }) });
         await older;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 · Map: 0:00:00');
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
         const failed = vm.runInContext('loadClipDurations()', context);
         requests[2].resolve({ ok: false });
         await failed;
@@ -81,6 +81,7 @@ test('rollback add events do not duplicate clips or change the selected video', 
         document: { createElement: () => ({ dataset: {} }) },
         socket: { on: (name, handler) => { handlers[name] = handler; } },
         logMessage() {},
+        updateClipCount() {},
         loadVideo() { loads++; }
     });
     vm.runInContext(html.match(/        function addClipToList\([\s\S]*?(?=        function loadVideo)/)[0], context);
@@ -103,4 +104,49 @@ test('dashboard displays replay save failures', () => {
     });
     handler('SaveReplayBuffer failed');
     assert.match(message, /SaveReplayBuffer failed/);
+});
+
+function trimContext() {
+    const nodes = new Map();
+    const node = id => {
+        if (!nodes.has(id)) nodes.set(id, { textContent: '', classList: { toggle() {} }, style: { setProperty() {} }, setAttribute() {} });
+        return nodes.get(id);
+    };
+    const cuts = [{}, {}, {}];
+    const sessions = [{}, {}];
+    const sent = [];
+    const context = vm.createContext({
+        currentFileName: null, player: { readyState: 0, duration: NaN, currentTime: 0 },
+        inTime: 0, outTime: null, sessionBusy: false, captureBusy: false, cutPending: false,
+        obsConnected: false, matchState: { match: null },
+        socket: { connected: true, emit: (...args) => sent.push(args) },
+        document: { getElementById: node, querySelectorAll: selector => selector === '[data-cut-target]' ? cuts : sessions },
+        notify() {}
+    });
+    vm.runInContext(html.match(/        function clipReady\([\s\S]*?(?=        player.addEventListener)/)[0], context);
+    vm.runInContext(html.match(/        function setIn\([\s\S]*?(?=        socket.on\('cut_success')/)[0], context);
+    return { context, node, cuts, sent };
+}
+
+test('trim controls require media metadata and recover from an invalid range', () => {
+    const { context, node, cuts } = trimContext();
+    vm.runInContext('updateControls()', context);
+    assert.equal(node('trim-fields').disabled, true);
+    assert.ok(cuts.every(button => button.disabled));
+    vm.runInContext("currentFileName = 'clip.mp4'; player.readyState = 1; player.duration = 12; updateControls()", context);
+    assert.equal(node('trim-fields').disabled, false);
+    assert.ok(cuts.every(button => !button.disabled));
+    vm.runInContext('player.currentTime = 0; setOut()', context);
+    assert.ok(cuts.every(button => button.disabled), 'explicit OUT at zero is an invalid range, not the end sentinel');
+    vm.runInContext('resetMarks()', context);
+    assert.ok(cuts.every(button => !button.disabled));
+    assert.match(node('selection-status').textContent, /12.00/);
+});
+
+test('cut submission snapshots the current end without replacing the end sentinel and prevents duplicates', () => {
+    const { context, sent } = trimContext();
+    vm.runInContext("currentFileName = 'clip.mp4'; player.readyState = 1; player.duration = 12; cutVideo('map'); cutVideo('map')", context);
+    assert.equal(sent.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(sent[0])), ['cut_video', { fileName: 'clip.mp4', inTime: 0, outTime: 12, target: 'map' }]);
+    assert.equal(vm.runInContext('outTime', context), null);
 });

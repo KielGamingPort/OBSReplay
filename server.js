@@ -65,6 +65,7 @@ const remoteCommands = new Set([
 
 app.use(express.json({ limit: '4kb' }));
 app.get('/', (_req, res) => res.sendFile(path.join(publicDirectory, 'index.html')));
+app.get('/dashboard.css', (_req, res) => res.sendFile(path.join(publicDirectory, 'dashboard.css')));
 
 app.post('/api/session', (req, res) => {
     if (!access.establishSession(req, res)) {

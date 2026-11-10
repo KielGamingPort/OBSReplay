@@ -1,220 +1,174 @@
 <!DOCTYPE html>
-<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Replay Regie / V2</title><script src="/socket.io/socket.io.js"></script><style>
-:root{color-scheme:dark;--bg:#0c1015;--panel:#131a22;--line:#28323e;--muted:#98a6b7;--text:#edf2f7;--accent:#c5f16b}
-
-*{box-sizing:border-box}
-body{margin:0;min-width:1100px;background:var(--bg);color:var(--text);font:14px/1.5 'Segoe UI',sans-serif}
-button,input{font:inherit}
-button{cursor:pointer}
-button:disabled{opacity:.5;cursor:wait}
-button:focus-visible,input:focus-visible,video:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
-button{transition:background .15s,border-color .15s}
-button:hover{filter:brightness(1.15)}
-
-.panel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
-.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
-.status:before{content:'';width:7px;height:7px;background:#d9a05b;border-radius:50%}
-.status.connected:before{background:var(--accent)}
-
-.workspace{max-width:1740px;margin:auto;padding:20px 24px}
-p{margin:0;color:var(--muted)}
-.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;align-items:start}
-.main-panel{min-width:0}
-.card{border:1px solid var(--line);background:var(--panel);border-radius:12px;overflow:hidden}
-.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--line)}
-h2{font-size:13px;font-weight:600;margin:0}
-.video-container{position:relative;aspect-ratio:16/9;background:radial-gradient(ellipse at center,#1b2633,#080c11);display:grid;place-items:center}
-.empty-player{text-align:center;position:absolute;pointer-events:none}
-video{position:relative;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain;display:block}
-video:not([src]){visibility:hidden}
-.file-bar{padding:12px 18px;border-top:1px solid var(--line);font:12px monospace;color:var(--muted);overflow-wrap:anywhere}
-.controls{margin-top:18px;padding:20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px}
-.mark{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
-.time-box{font:13px monospace;color:var(--accent)}
-.transport{display:flex;gap:8px;justify-content:flex-end}
-.export{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--line);padding-top:18px}
-.export-buttons{display:flex;gap:8px}
-.btn{border:1px solid #354252;border-radius:6px;padding:10px 14px;background:#202b37;color:var(--text);font-size:12px;font-weight:600;white-space:nowrap}
-.btn-primary{background:var(--accent);color:#1c2b0b;border-color:var(--accent);padding:12px 19px}
-.btn-green{border-color:#597a39;color:#d0eea5;background:#26351e}
-.btn-gold{background:#293648;border-color:#425875}
-.btn-red{color:#f1aaa5;border-color:#62403f;background:#302022}
-.btn-small{font-size:11px;padding:7px 10px}
-.activity{margin-top:18px}.activity .section-head{flex-wrap:wrap}
-#status-log{height:112px;overflow-y:auto;padding:12px 18px;color:#a9b7c7;font:11px/1.9 Consolas,monospace}
-.side-panel{min-width:0}
-.library-header{padding:18px}
-#clip-list{padding:10px;max-height:650px;overflow:auto}
-.clip-item{width:100%;text-align:left;display:block;background:#19222d;border:1px solid transparent;border-radius:7px;padding:14px;margin-bottom:7px;color:#c9d2dd;font-size:12px;overflow-wrap:anywhere}
-.clip-item:hover{background:#243141}
-.clip-item.active{border-color:#84a84e;background:#25331f;color:#d7efb8}
-.empty-library{padding:35px 16px;text-align:center;color:var(--muted);font-size:12px}
-.library-footer{border-top:1px solid var(--line);padding:16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-
-dialog{width:460px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:28px;background:var(--panel);color:var(--text);border:1px solid #3e4d5e;border-radius:12px;box-shadow:0 24px 100px #0009}
-dialog::backdrop{background:#03070bc9;backdrop-filter:blur(4px)}
-dialog h2{font-size:20px;margin-bottom:18px}
-dialog p{font-size:12px;margin:16px 0}
-dialog label{color:var(--text)}
-input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c1219;color:var(--text);border:1px solid #3d4b5b;border-radius:5px}
-#settings-status{color:var(--accent)}
-.dialog-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
-
-@media(min-width:1500px){.layout{grid-template-columns:minmax(0,1fr) 380px}
-}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}
-}
-
-
-body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-template-columns:minmax(0,1fr) 410px;gap:12px}.main-panel>.card{height:100%;display:flex;flex-direction:column}.video-container{flex:1;min-height:0;aspect-ratio:auto}.side-panel{height:100%;display:flex;flex-direction:column;gap:10px}.controls{margin:0;padding:12px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}.export{padding-top:10px;flex-wrap:wrap}.transport{justify-content:flex-start}.side-panel>.card:not(.controls):not(.activity){min-height:80px;flex:1;display:flex;flex-direction:column}#clip-list{min-height:0;max-height:none;overflow:auto}.library-header,.library-footer{padding:10px}.activity{margin:0;flex-shrink:0}#status-log{height:60px}.section-head{padding:10px}.btn{padding:7px 10px}@media(max-width:760px){.workspace{height:auto}.layout{display:flex;flex-direction:column}.main-panel,.side-panel{width:100%;height:auto}.video-container{aspect-ratio:16/9}#clip-list{max-height:200px}}
-</style></head><body>
+<html lang="de">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replay Regie</title>
+<link rel="stylesheet" href="/dashboard.css"><script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
 <main class="workspace">
+<header class="app-header">
+<div class="brand"><h1>Replay Regie<span style="color:var(--accent)">.</span></h1><p>Live aufnehmen. Highlights schneiden.</p></div>
+<div class="header-actions"><span id="connection-status" class="status" role="status">Regie verbindet…</span><span id="obs-status" class="status" role="status">OBS wird geprüft…</span><button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button><button class="btn" onclick="openSettings()">OBS-Verbindung</button></div>
+</header>
+<section class="session card" aria-label="Match und Spielstand">
+<div class="session-context"><div class="eyebrow">Aktuelle Session</div><h2 id="match-state">Kein Match eingerichtet · Map 1</h2><p id="match-teams">Match einrichten oder direkt mit Replays starten.</p></div>
+<div class="session-controls"><button class="btn" data-session-action onclick="setupMatch()">Match einrichten</button><button id="session-toggle" class="btn mobile-only" aria-expanded="false" aria-controls="session-actions" onclick="toggleSessionMenu()">Mehr ⋯</button><div id="session-actions" class="session-actions"><button id="next-map" class="btn" data-session-action onclick="nextMap()" disabled>Nächste Map</button><button class="btn" data-session-action onclick="triggerReset()">Runde beenden</button><button class="btn btn-quiet" data-session-action onclick="endTournament()">Turnier exportieren</button></div></div>
+</section>
 <div class="layout">
 <section class="main-panel" aria-label="Clip bearbeiten">
 <div class="card">
-<div class="section-head">
-<h2>Clip-Vorschau</h2>
-<button class="btn btn-primary" onclick="triggerReplay()">Replay speichern</button>
+<div class="section-head"><h2>01 <span class="muted">/</span> Aufnahme &amp; Vorschau</h2><div class="capture-actions"><button id="capture-replay" class="btn btn-primary" onclick="triggerReplay()" disabled>Replay aufnehmen</button><small id="capture-hint">OBS-Verbindung prüfen</small></div></div>
+<label class="mobile-clip-picker" for="mobile-clip">Clip wählen<select id="mobile-clip" onchange="selectMobileClip(this.value)"><option value="">Noch keine Clips</option></select></label>
+<div class="video-container"><div id="empty-player" class="empty-player"><div class="empty-symbol" aria-hidden="true">▷</div><h3>Bereit für das nächste Highlight</h3><p>OBS verbinden und den Replay-Puffer starten. Dann ein Replay aufnehmen oder einen vorhandenen Clip aus der Liste wählen.</p></div><video id="player" controls preload="metadata" aria-label="Replay-Vorschau"></video></div>
+<div class="file-bar" id="current-file">Vorschau · Noch kein Clip ausgewählt</div>
 </div>
-<div class="video-container">
-<div id="empty-player" class="empty-player">
-<p>Kein Clip geladen</p>
-</div>
-<video id="player" controls aria-label="Replay-Vorschau">
-</video>
-</div>
-<div class="file-bar" id="current-file">Kein Clip geladen</div>
-</div>
-
+<section class="controls card" aria-labelledby="trim-title">
+<div class="controls-title"><h2 id="trim-title">02 <span class="muted">/</span> Auswahl schneiden</h2><p>IN → OUT → Ziel wählen</p></div>
+<fieldset id="trim-fields" class="trim-fields" disabled aria-label="Schnittmarken und Wiedergabe">
+<div class="trim-row"><div class="marks"><div class="mark"><button class="btn" onclick="setIn()">IN setzen</button><input class="time-box" id="in-display" type="number" min="0" step="0.01" value="0.00" aria-label="IN-Marke in Sekunden" onchange="setMarkFromInput('in',this)"></div><div class="mark"><button class="btn" onclick="setOut()">OUT setzen</button><input class="time-box" id="out-display" type="number" min="0" step="0.01" placeholder="Ende" aria-label="OUT-Marke in Sekunden, leer für Clipende" onchange="setMarkFromInput('out',this)"></div></div>
+<div class="transport"><button class="btn" aria-label="Zurückspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">◀◀ Zurück</button><button class="btn" aria-label="Vorspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">Vor ▶▶</button><button class="btn btn-quiet" onclick="resetMarks()">Marken löschen</button><button id="preview-selection" class="btn" onclick="previewSelection()">Auswahl abspielen</button></div></div><p class="seek-hint">Zum Spulen gedrückt halten.</p>
+<div id="selection-track" class="selection-track" role="img" aria-label="Noch keine Auswahl"><span class="range-marker range-in">IN</span><span class="range-marker range-out">OUT</span></div></fieldset>
+<p id="selection-status" class="selection-summary" role="status">Zuerst einen Clip aus der Liste wählen.</p>
+<div class="export"><div class="export-copy"><h3>Auswahl speichern</h3><p>Originalclip bleibt erhalten.</p></div><div class="export-buttons"><button class="btn" data-cut-target="round" onclick="cutVideo('round')" disabled>In Runde<small>bis Rundenende</small></button><button class="btn" data-cut-target="map" onclick="cutVideo('map')" disabled>In Map<small>bis Mapende</small></button><button class="btn" data-cut-target="match" onclick="cutVideo('match')" disabled>In Match<small>bis Matchende</small></button></div></div>
 </section>
-<aside class="side-panel" aria-label="Clip-Mediathek">
-<div class="controls card">
-<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><button class="btn" onclick="endTournament()">Turnier exportieren</button><button class="btn" onclick="nextMap()">Nächste Map</button><span id="match-state">Match: ?</span></div>
-<div class="mark">
-<button class="btn" onclick="setIn()">IN setzen</button>
-<div class="time-box" id="in-display">IN: 0.00s</div>
-<button class="btn" onclick="setOut()">OUT setzen</button>
-<div class="time-box" id="out-display">OUT: Ende</div>
-</div>
-<div class="transport">
-<button class="btn" onpointerdown="this.focus(); this.setPointerCapture(event.pointerId); startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">Zurückspulen</button>
-<button class="btn" onpointerdown="this.focus(); this.setPointerCapture(event.pointerId); startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">Vorspulen</button>
-</div>
-<div class="export">
-<div>
-<h2>Auswahl sichern</h2>
-<p id="clip-durations" role="status">Runde: … · Match: …</p>
-</div>
-<div class="export-buttons">
-<button class="btn btn-green" onclick="cutVideo('round')">In Runde speichern</button>
-<button class="btn" onclick="cutVideo('map')">In Map speichern</button>
-<button class="btn btn-gold" onclick="cutVideo('match')">In Match speichern</button>
-</div>
-</div>
-</div>
-
-<div class="card">
-<div class="library-header">
-<h2 style="font-size:18px;margin-top:5px">Gesammelte Clips</h2>
-</div>
-<div id="clip-list">
-<div class="empty-library">Anmeldung wird vorbereitet...</div>
-</div>
-<div class="library-footer">
-<button class="btn btn-red btn-small" onclick="triggerReset()">Runde zurücksetzen</button>
-</div>
-</div>
-<section class="activity card">
-<div class="section-head">
-<h2>Aktivität</h2>
-<div class="panel-actions">
-<span id="connection-status" class="status" role="status">Regie verbindet...</span>
-<button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button>
-<button class="btn" onclick="openSettings()">Einstellungen</button>
-</div>
-</div>
-<div id="status-log" role="log" aria-label="Systemmeldungen">System bereit.<br>
-</div>
 </section>
-</aside>
+<aside class="side-panel" aria-label="Clip-Mediathek"><section class="card"><div class="library-header"><h2>Clips dieser Runde</h2><span id="clip-count" class="count" aria-label="Anzahl Clips">0</span></div><div id="clip-list"><div class="empty-library">Clips werden geladen…</div></div><div class="library-footer">Clip wählen → in der Vorschau schneiden</div><div id="clip-durations" class="totals" role="status">Runde: … · Map: … · Match: …</div></section><p class="empty-help">Runde → Map → Match<br>Gespeicherte Auswahlen bleiben bis zum jeweiligen Abschluss erhalten.</p></aside>
 </div>
+<div id="action-status" class="action-status" role="status" hidden></div>
+<details class="activity card"><summary>Aktivität <span>Systemmeldungen und letzte Aktionen</span></summary><div id="status-log" role="log" aria-label="Systemmeldungen">Regie gestartet.</div></details>
 </main>
-<dialog id="login" aria-labelledby="login-title">
-<form id="login-form">
-<h2 id="login-title">Anmelden</h2>
-<p>
-<label>Zugriffstoken<input id="control-token" type="password" required autocomplete="off">
-</label>
-</p>
-<button class="btn btn-primary">Anmelden</button>
-</form>
-</dialog>
-<dialog id="settings" aria-labelledby="settings-title">
-<form id="settings-form">
-<h2 id="settings-title">OBS-Verbindung</h2>
-<p>
-<label>WebSocket-Adresse<input id="obs-url" type="url" required>
-</label>
-</p>
-<p>
-<label>Passwort<input id="obs-password" type="password" autocomplete="new-password">
-</label>
-</p>
-<p>Leer lassen, um das Passwort beizubehalten.</p>
-<p>
-<label>
-<input id="obs-clear" type="checkbox"> Passwort entfernen</label>
-</p>
-<p>Wird gespeichert und bleibt nach einem Serverneustart erhalten.</p>
-<p id="settings-status" role="status">
-</p>
-<div class="dialog-actions">
-<button id="settings-save" class="btn btn-green">Übernehmen &amp; verbinden</button>
-<button type="button" class="btn" onclick="document.getElementById('settings').close()">Schließen</button>
-</div>
-</form>
-</dialog>
+<dialog id="login" aria-labelledby="login-title"><form id="login-form"><h2 id="login-title">Anmelden</h2><p>Für den Fernzugriff den Zugriffstoken aus der Serverkonfiguration eingeben.</p><p><label>Zugriffstoken<input id="control-token" type="password" required autocomplete="off"></label></p><div class="dialog-actions"><button class="btn btn-primary">Anmelden</button><button type="button" class="btn" onclick="document.getElementById('login').requestClose()">Abbrechen</button></div></form></dialog>
+<dialog id="settings" aria-labelledby="settings-title"><form id="settings-form"><h2 id="settings-title">OBS-Verbindung</h2><p>In OBS: Werkzeuge → WebSocket-Servereinstellungen. Server aktivieren und Adresse sowie Passwort übernehmen.</p><p><label>WebSocket-Adresse<input id="obs-url" type="url" required placeholder="ws://127.0.0.1:4455"></label></p><p><label>Passwort<input id="obs-password" type="password" autocomplete="new-password" aria-describedby="password-help"></label></p><p id="password-help">Leer lassen, um das gespeicherte Passwort beizubehalten.</p><p><label class="checkbox-label"><input id="obs-clear" type="checkbox"> Gespeichertes Passwort entfernen</label></p><p>Die Verbindung bleibt nach einem Serverneustart gespeichert.</p><p id="settings-status" class="form-status" role="status"></p><div class="dialog-actions"><button id="settings-save" class="btn btn-primary">Speichern &amp; verbinden</button><button type="button" class="btn" onclick="document.getElementById('settings').close()">Schließen</button></div></form></dialog>
+<dialog id="match-dialog" aria-labelledby="match-title"><form id="match-form"><h2 id="match-title">Match einrichten</h2><p>Ein nummeriertes Match aus Challonge laden und Teams zuordnen.</p><div class="load-matches"><label>Challonge Turnier-ID<input id="tournament-id" required pattern="[a-zA-Z0-9_\-]+" placeholder="z. B. community-turnier"></label><button id="load-matches" class="btn" type="button" onclick="loadMatches()">Matches laden</button></div><p><label>Match<select id="match-select" required disabled><option value="">Zuerst Matches laden</option></select></label></p><p><label>Turniername<input id="tournament-name" required maxlength="120"></label></p><div class="form-grid"><p><label>Team 1<input id="team-one" required maxlength="120"></label></p><p><label>Team 2<input id="team-two" required maxlength="120"></label></p></div><p class="dialog-note">Beim Start werden die aktuellen Runden-, Map- und Matchclips archiviert. Die Clipliste wird geleert und Map 1 beginnt.</p><p id="match-status" class="form-status" role="status"></p><div class="dialog-actions"><button id="match-save" class="btn btn-primary" disabled>Match starten</button><button type="button" class="btn" onclick="document.getElementById('match-dialog').close()">Abbrechen</button></div></form></dialog>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title"><form method="dialog"><h2 id="confirm-title">Aktion bestätigen</h2><p id="confirm-description"></p><div class="dialog-actions"><button id="confirm-accept" class="btn btn-primary" value="confirm">Fortfahren</button><button class="btn" value="cancel" autofocus>Abbrechen</button></div></form></dialog>
     <script>
         async function endTournament() {
-            try {
-                const response = await fetch('/api/end-tournament', { method: 'POST' });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error);
-                logMessage('Turnier exportiert: ' + result.exportPath);
-            } catch (error) { logMessage(error.message); }
+            if (!await confirmAction('Turnier exportieren?', 'Alle archivierten und aktuellen Clips werden als einzelne Dateien exportiert. Die Quelldateien bleiben erhalten.', 'Export starten')) return;
+            await runSessionAction(async () => {
+                const result = await api('/api/end-tournament', { method: 'POST' });
+                notify('Export vollständig. Speicherort: ' + result.exportPath);
+            });
         }
         async function nextMap() {
-            try {
-                const response = await fetch('/api/next-map', { method: 'POST' });
-                const state = await response.json();
-                if (!response.ok) throw new Error(state.error);
-                showMatch(state);
-            } catch (error) { logMessage(error.message); }
+            if (!matchState.match || !await confirmAction('Nächste Map starten?', 'Aktuelle Runden- und Mapclips werden archiviert und die Clipliste geleert. Matchclips bleiben erhalten.', 'Map starten')) return;
+            await runSessionAction(async () => {
+                showMatch(await api('/api/next-map', { method: 'POST' }));
+                notify('Nächste Map gestartet. Matchclips bleiben erhalten.');
+            });
         }
-        function showMatch(state) { document.getElementById('match-state').textContent = `Match: ${state.match?.number ?? '?'} · Map: ${state.map}`; }
-        async function setupMatch() {
-            const tournament = prompt('Challonge Turnier-ID (bei Community: community-turnier)');
-            if (!tournament) return;
-            try {
-                const response = await fetch('/api/challonge/matches?tournament=' + encodeURIComponent(tournament));
-                const matches = await response.json();
-                if (!response.ok) throw new Error(matches.error);
-                const number = Number(prompt('Matchnummer: ' + matches.map(m => m.number).join(', ')));
-                const match = matches.find(m => m.number === number);
-                if (!match) throw new Error('Ungültige Matchnummer');
-                match.tournament = prompt('Turniername:', tournament) || tournament;
-                match.team1 = prompt('Team 1:') || 'Team1';
-                match.team2 = prompt('Team 2:') || 'Team2';
-                const result = await fetch('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(match) });
-                const state = await result.json();
-                if (!result.ok) throw new Error(state.error);
-                showMatch(state);
-            } catch (error) { logMessage(error.message); }
+        let matchState = { match: null, map: 1 };
+        let sessionBusy = false;
+        let obsConnected = false;
+        let captureBusy = false;
+        let cutPending = false;
+        let matches = [];
+        function toggleSessionMenu() {
+            const expanded = document.getElementById('session-actions').classList.toggle('expanded');
+            document.getElementById('session-toggle').setAttribute('aria-expanded', String(expanded));
         }
+        function selectMobileClip(file) {
+            const clip = Array.from(clipList.children).find(clip => clip.dataset.fileName === file);
+            if (clip) clip.click();
+            else document.getElementById('mobile-clip').value = currentFileName || '';
+        }
+        async function api(url, options) {
+            const response = await fetch(url, options);
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Aktion fehlgeschlagen.');
+            return result;
+        }
+        function notify(message, error = false) {
+            const status = document.getElementById('action-status');
+            status.hidden = false;
+            status.textContent = message;
+            status.classList.toggle('error', error);
+            logMessage(message);
+        }
+        function confirmAction(title, description, label) {
+            const dialog = document.getElementById('confirm-dialog');
+            if (dialog.open) return Promise.resolve(false);
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-description').textContent = description;
+            document.getElementById('confirm-accept').textContent = label;
+            dialog.returnValue = '';
+            dialog.showModal();
+            return new Promise(resolve => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true }));
+        }
+        async function runSessionAction(action) {
+            if (!socket.connected || sessionBusy || cutPending || captureBusy) return;
+            sessionBusy = true;
+            updateControls();
+            notify('Aktion läuft…');
+            try { await action(); return true; }
+            catch (error) { notify(error.message, true); return false; }
+            finally { sessionBusy = false; updateControls(); }
+        }
+        function showMatch(state) {
+            matchState = state;
+            document.getElementById('match-state').textContent = state.match ? `Match ${state.match.number} · Map ${state.map}` : `Kein Match eingerichtet · Map ${state.map}`;
+            document.getElementById('match-teams').textContent = state.match ? `${state.match.tournament || 'Turnier'} · ${state.match.team1 || 'Team 1'} vs. ${state.match.team2 || 'Team 2'}` : 'Match einrichten oder direkt mit Replays starten.';
+            updateControls();
+        }
+        function setupMatch() {
+            if (sessionBusy) return;
+            document.getElementById('match-dialog').showModal();
+        }
+        document.getElementById('tournament-id').addEventListener('input', () => {
+            matches = [];
+            document.getElementById('match-select').disabled = true;
+            document.getElementById('match-save').disabled = true;
+            document.getElementById('match-status').textContent = 'Matches für diese Turnier-ID neu laden.';
+        });
+        async function loadMatches() {
+            const input = document.getElementById('tournament-id');
+            if (!input.reportValidity()) return;
+            const tournament = input.value.trim();
+            const button = document.getElementById('load-matches');
+            const select = document.getElementById('match-select');
+            const status = document.getElementById('match-status');
+            button.disabled = true; select.disabled = true;
+            document.getElementById('match-save').disabled = true;
+            status.textContent = 'Matches werden geladen…'; status.classList.remove('error');
+            try {
+                const result = await api('/api/challonge/matches?tournament=' + encodeURIComponent(tournament));
+                if (input.value.trim() !== tournament) return;
+                matches = result.filter(match => Number.isSafeInteger(match.number) && match.number > 0).sort((a, b) => a.number - b.number);
+                select.replaceChildren(new Option('Match wählen', ''));
+                for (const match of matches) select.add(new Option(`Match ${match.number} · ${match.state}`, String(match.id)));
+                select.disabled = !matches.length;
+                document.getElementById('tournament-name').value = tournament;
+                status.textContent = matches.length ? `${matches.length} Matches geladen. Match und Teams wählen.` : 'Keine nummerierten Matches gefunden.';
+                if (matches.length) select.focus();
+            } catch (error) { status.textContent = error.message; status.classList.add('error'); }
+            finally { button.disabled = false; }
+        }
+        document.getElementById('match-select').addEventListener('change', event => {
+            document.getElementById('match-save').disabled = !event.target.value;
+        });
+        document.getElementById('match-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const match = matches.find(match => String(match.id) === document.getElementById('match-select').value);
+            if (!match) return;
+            const payload = { ...match, tournament: document.getElementById('tournament-name').value.trim(), team1: document.getElementById('team-one').value.trim(), team2: document.getElementById('team-two').value.trim() };
+            if (!payload.tournament || !payload.team1 || !payload.team2) return;
+            const save = document.getElementById('match-save');
+            const status = document.getElementById('match-status');
+            save.disabled = true;
+            status.textContent = 'Match wird gestartet…'; status.classList.remove('error');
+            const success = await runSessionAction(async () => {
+                showMatch(await api('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }));
+                document.getElementById('match-dialog').close();
+                notify('Match gestartet. Map 1 ist bereit.');
+            });
+            if (!success) { status.textContent = document.getElementById('action-status').textContent; status.classList.add('error'); }
+            save.disabled = false;
+        });
         async function openSettings() {
             document.getElementById('settings').showModal();
             const button = document.getElementById('settings-save');
             button.disabled = true;
+            document.getElementById('settings-status').textContent = 'Verbindungseinstellungen werden geladen…';
             try {
                 const response = await fetch('/api/obs-settings');
                 if (!response.ok) throw new Error('Bitte zuerst anmelden.');
@@ -255,17 +209,73 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 
         let currentFileName = null;
         let inTime = 0;
-        let outTime = 0;
+        let outTime = null;
         let seekInterval;
         let seekMultiplier = 1;
         let isSeeking = false;
         let wasPlaying = false;
+        let previewingSelection = false;
+
+        function clipReady() {
+            return Boolean(currentFileName && player.readyState >= 1 && Number.isFinite(player.duration) && player.duration > 0 && !player.error);
+        }
+        function selectionEnd() { return outTime === null ? player.duration : outTime; }
+        function updateControls() {
+            const connected = socket.connected;
+            const blocked = sessionBusy || cutPending || captureBusy;
+            const ready = clipReady();
+            document.getElementById('capture-replay').disabled = !connected || !obsConnected || blocked;
+            document.getElementById('capture-replay').textContent = captureBusy ? 'Wird aufgenommen…' : 'Replay aufnehmen';
+            document.getElementById('capture-hint').textContent = !connected ? 'Regie-Verbindung erforderlich' : !obsConnected ? 'Zuerst OBS verbinden' : 'OBS Replay-Puffer muss aktiv sein';
+            document.getElementById('trim-fields').disabled = !ready || blocked;
+            document.querySelectorAll('[data-cut-target]').forEach(button => {
+                button.disabled = !connected || !ready || blocked || inTime >= selectionEnd();
+            });
+            document.querySelectorAll('[data-session-action]').forEach(button => { button.disabled = !connected || blocked; });
+            document.getElementById('next-map').disabled ||= !matchState.match;
+            const summary = document.getElementById('selection-status');
+            const invalid = ready && inTime >= selectionEnd();
+            summary.classList.toggle('error', invalid);
+            summary.textContent = !currentFileName ? 'Zuerst einen Clip aus der Liste wählen.' : !ready ? 'Clip wird geladen. Bei einem Wiedergabefehler einen anderen Clip wählen.' : invalid ? 'OUT muss nach IN liegen. Marken korrigieren oder löschen.' : `Auswahl: ${(selectionEnd() - inTime).toFixed(2)} s von ${player.duration.toFixed(2)} s`;
+            const track = document.getElementById('selection-track');
+            track.classList.toggle('unavailable', !ready);
+            track.style.setProperty('--in', ready ? `${inTime / player.duration * 100}%` : '0%');
+            track.style.setProperty('--out', ready ? `${selectionEnd() / player.duration * 100}%` : '100%');
+            track.setAttribute('aria-label', ready ? `Ausgewählt: ${inTime.toFixed(2)} bis ${selectionEnd().toFixed(2)} Sekunden` : 'Noch keine Auswahl');
+            document.getElementById('preview-selection').disabled = !ready || invalid || blocked;
+            const inInput = document.getElementById('in-display');
+            const outInput = document.getElementById('out-display');
+            inInput.value = inTime.toFixed(2);
+            outInput.value = outTime === null ? '' : outTime.toFixed(2);
+            inInput.max = outInput.max = ready ? player.duration : 0;
+        }
+        function resetMarks() {
+            inTime = 0; outTime = null;
+            document.getElementById('in-display').textContent = '0.00 s';
+            document.getElementById('out-display').textContent = 'Ende';
+            updateControls();
+        }
+        player.addEventListener('loadedmetadata', updateControls);
+        player.addEventListener('durationchange', updateControls);
+        player.addEventListener('error', () => { stopSeek(); updateControls(); notify('Clip kann nicht abgespielt werden. Browserkompatiblen Codec verwenden, z. B. H.264/AAC.', true); });
+        function previewSelection() {
+            if (!clipReady() || inTime >= selectionEnd() || sessionBusy || cutPending) return;
+            stopSeek();
+            player.currentTime = inTime;
+            previewingSelection = true;
+            player.play().catch(() => { previewingSelection = false; notify('Wiedergabe konnte nicht gestartet werden.', true); });
+        }
+        player.addEventListener('timeupdate', () => {
+            if (previewingSelection && player.currentTime >= selectionEnd()) { previewingSelection = false; player.pause(); player.currentTime = selectionEnd(); }
+        });
+        player.addEventListener('pause', () => { previewingSelection = false; });
 
         function logMessage(msg, color = null) {
             const line = document.createElement('div');
             line.textContent = msg;
             if (color) line.style.color = color;
             statusLog.appendChild(line);
+            while (statusLog.childElementCount > 150) statusLog.firstElementChild.remove();
             statusLog.scrollTop = statusLog.scrollHeight;
         }
 
@@ -329,7 +339,8 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             const files = await res.json();
             clipList.innerHTML = '';
             files.forEach(file => addClipToList(file, false));
-            if (!files.length) clipList.innerHTML = '<div class="empty-library">Keine Clips vorhanden.</div>';
+            if (!files.length) clipList.innerHTML = '<div class="empty-library"><strong>Noch keine Replays</strong>Replay aufnehmen, sobald OBS verbunden ist. Neue Clips erscheinen automatisch hier.</div>';
+            updateClipCount();
         }
         authenticate().catch(showAuthError);
 
@@ -346,12 +357,21 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
                     const rounded = Math.round(seconds);
                     return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
                 };
-                display.textContent = `Runde: ${format(totals.round)} · Match: ${format(totals.match)} · Map: ${format(totals.map || 0)}`;
+                display.textContent = `Runde: ${format(totals.round)} · Map: ${format(totals.map || 0)} · Match: ${format(totals.match)}`;
             } catch {
                 if (generation === durationRequestGeneration) display.textContent = 'Cliplängen nicht verfügbar';
             }
         }
         socket.on('clip_durations_changed', loadClipDurations);
+
+        function updateClipCount() {
+            document.getElementById('clip-count').textContent = clipList.querySelectorAll('.clip-item').length;
+            const select = document.getElementById('mobile-clip');
+            select.replaceChildren(new Option('Clip wählen…', ''));
+            for (const clip of clipList.querySelectorAll('.clip-item')) select.add(new Option(clip.dataset.fileName, clip.dataset.fileName));
+            select.value = currentFileName || '';
+            select.disabled = select.options.length === 1;
+        }
 
         function addClipToList(fileName, prepend = true) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;
@@ -364,16 +384,20 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             div.onclick = () => loadVideo(fileName, div);
             if (prepend) clipList.prepend(div);
             else clipList.append(div);
+            updateClipCount();
             return true;
         }
 
         function loadVideo(fileName, element = null) {
+            stopSeek();
+            previewingSelection = false;
             currentFileName = fileName;
+            document.getElementById('mobile-clip').value = fileName;
             document.getElementById('current-file').innerText = "Schneide: " + fileName;
 
             // Aktiven Clip in der Liste farblich markieren
-            document.querySelectorAll('.clip-item').forEach(el => el.classList.remove('active'));
-            if (element) element.classList.add('active');
+            document.querySelectorAll('.clip-item').forEach(el => { el.classList.remove('active'); el.setAttribute('aria-pressed', 'false'); });
+            if (element) { element.classList.add('active'); element.setAttribute('aria-pressed', 'true'); }
 
             player.pause();
             player.removeAttribute('src');
@@ -382,24 +406,28 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             player.src = "/raw_videos/" + encodeURIComponent(fileName);
             player.load();
 
-            inTime = 0; outTime = 0;
-            document.getElementById('in-display').innerText = "IN: 0.00s";
-            document.getElementById('out-display').innerText = "OUT: Ende";
+            resetMarks();
         }
 
         socket.on('replay_error', (message) => logMessage(`OBS: ${message}`));
         function triggerReplay() {
-            socket.emit('trigger_replay', (result) => {
-                if (!result?.ok) logMessage(`OBS: ${result?.error || 'Unbekannter Fehler'}`);
+            if (!socket.connected || !obsConnected || sessionBusy || captureBusy || cutPending) return;
+            captureBusy = true; updateControls();
+            socket.timeout(15000).emit('trigger_replay', (error, result) => {
+                captureBusy = false; updateControls();
+                if (error || !result?.ok) notify(`OBS: ${result?.error || 'Keine Bestätigung erhalten. Verbindung und Replay-Puffer prüfen.'}`, true);
+                else notify('Replay in OBS gespeichert. Der Clip erscheint, sobald die Datei bereit ist.');
             });
         }
-        socket.on('disconnect', () => { document.getElementById('connection-status').textContent = 'Regie getrennt'; document.getElementById('connection-status').classList.remove('connected'); });
-        socket.on('connect_error', () => { document.getElementById('connection-status').textContent = 'Regie nicht erreichbar'; });
+        socket.on('connect', () => { const badge = document.getElementById('connection-status'); badge.textContent = 'Regie verbunden'; badge.classList.add('connected'); updateControls(); });
+        socket.on('disconnect', () => { stopSeek(); obsConnected = false; cutPending = false; captureBusy = false; document.getElementById('connection-status').textContent = 'Regie getrennt'; document.getElementById('connection-status').classList.remove('connected'); document.getElementById('obs-status').textContent = 'OBS unbekannt'; document.getElementById('obs-status').classList.remove('connected'); updateControls(); notify('Verbindung verloren. Laufende Aktionen im Zielordner prüfen. Regie verbindet automatisch erneut.', true); });
+        socket.on('connect_error', () => { document.getElementById('connection-status').textContent = 'Regie nicht erreichbar'; updateControls(); });
         socket.on('obs_status', (status) => {
-            loadClipDurations();
-            const badge = document.getElementById('connection-status');
+            obsConnected = status.connected;
+            const badge = document.getElementById('obs-status');
             badge.textContent = status.connected ? 'OBS verbunden' : 'OBS getrennt';
             badge.classList.toggle('connected', status.connected);
+            updateControls();
             logMessage(status.connected ? 'OBS verbunden' : `OBS getrennt${status.error ? `: ${status.error}` : ''}`);
         });
         socket.on('new_replay_available', (fileName) => {
@@ -408,20 +436,31 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             loadVideo(fileName, clipList.firstChild); // Direkt laden
         });
 
-        function setIn() { inTime = player.currentTime; document.getElementById('in-display').innerText = `IN: ${inTime.toFixed(2)}s`; }
-        function setOut() { outTime = player.currentTime; document.getElementById('out-display').innerText = `OUT: ${outTime.toFixed(2)}s`; }
-
-        function cutVideo(target) {
-            if (!currentFileName) return alert("Kein Video geladen!");
-            if (outTime === 0) outTime = player.duration;
-            if (inTime >= outTime) return alert("IN liegt nach OUT!");
-
-            logMessage(`Exportiere nach ${target.toUpperCase()}...`);
-            socket.emit('cut_video', { fileName: currentFileName, inTime, outTime, target });
+        function setIn() { if (!clipReady() || sessionBusy || cutPending) return; inTime = player.currentTime; document.getElementById('in-display').textContent = `${inTime.toFixed(2)} s`; updateControls(); }
+        function setOut() { if (!clipReady() || sessionBusy || cutPending) return; outTime = player.currentTime; document.getElementById('out-display').textContent = `${outTime.toFixed(2)} s`; updateControls(); }
+        function setMarkFromInput(kind, input) {
+            if (!clipReady() || sessionBusy || cutPending) return;
+            const value = input.value === '' ? (kind === 'out' ? null : 0) : Number(input.value);
+            if (value !== null && (!Number.isFinite(value) || value < 0 || value > player.duration)) {
+                notify('Schnittmarke muss innerhalb der Cliplänge liegen.', true);
+                updateControls(); return;
+            }
+            if (kind === 'in') inTime = value;
+            else outTime = value;
+            updateControls();
         }
 
-        socket.on('cut_success', (data) => logMessage(`Clip in ${data.target.toUpperCase()} gespeichert!`));
-        socket.on('cut_error', (err) => logMessage(`FEHLER: ${err}`));
+        function cutVideo(target) {
+            if (!socket.connected || !clipReady() || sessionBusy || cutPending || captureBusy) return;
+            const end = selectionEnd();
+            if (inTime >= end) return notify('OUT muss nach IN liegen.', true);
+            cutPending = true; updateControls();
+            notify(`Auswahl wird in ${target === 'round' ? 'Runde' : target === 'map' ? 'Map' : 'Match'} gespeichert…`);
+            socket.emit('cut_video', { fileName: currentFileName, inTime, outTime: end, target });
+        }
+
+        socket.on('cut_success', (data) => { cutPending = false; updateControls(); notify(`Auswahl in ${data.target === 'round' ? 'Runde' : data.target === 'map' ? 'Map' : 'Match'} gespeichert: ${data.file}`); });
+        socket.on('cut_error', (err) => { cutPending = false; updateControls(); notify(`Speichern fehlgeschlagen: ${err}`, true); });
         // --- FERNSTEUERUNG VOM STREAM DECK EMPFANGEN ---
         socket.on('remote_command', (cmd) => {
             // Das zeigt dir im Browser an, dass der Befehl wirklich durchkam
@@ -461,12 +500,12 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 
         // --- DYNAMISCHES SPULEN ---
         function startFF() {
-            if (isSeeking) return;
+            if (isSeeking || !clipReady() || sessionBusy || cutPending) return;
             isSeeking = true;
             wasPlaying = !player.paused;
             seekMultiplier = 2.0; // Startet bei 2-facher Geschwindigkeit
 
-            player.play();
+            player.play().catch(() => stopSeek());
             player.playbackRate = seekMultiplier;
 
             seekInterval = setInterval(() => {
@@ -478,7 +517,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
         }
 
         function startRW() {
-            if (isSeeking) return;
+            if (isSeeking || !clipReady() || sessionBusy || cutPending) return;
             isSeeking = true;
             wasPlaying = !player.paused;
 
@@ -499,12 +538,13 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             clearInterval(seekInterval);
             player.playbackRate = 1.0; // Normales Tempo wiederherstellen
 
-            if (wasPlaying) player.play();
+            if (wasPlaying) player.play().catch(() => {});
             else player.pause();
         }
 
         // Empfängt das Reset-Signal vom Server
         socket.on('reset_dashboard', () => {
+            stopSeek();
             loadClipDurations();
             logMessage('Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
 
@@ -518,21 +558,15 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             player.load();
             document.getElementById('current-file').innerText = "Kein Clip geladen";
             currentFileName = null;
-            inTime = 0;
-            outTime = 0;
-            document.getElementById('in-display').innerText = "IN: 0.00s";
-            document.getElementById('out-display').innerText = "OUT: Ende";
+            resetMarks(); updateClipCount();
         });
 
         async function triggerReset() {
-            if (confirm("Möchtest du die Runde wirklich beenden? Alle Clips werden archiviert und die Liste geleert!")) {
-                const response = await fetch('/api/reset-round', { method: 'POST' });
-                if (!response.ok) {
-                    const result = await response.json().catch(() => ({}));
-                    logMessage(`Reset fehlgeschlagen: ${result.error || response.statusText}`);
-                }
-            }
+            if (!await confirmAction('Runde beenden?', 'Rohclips und Rundenauswahlen werden im Backup archiviert und die Clipliste geleert. Map- und Matchclips bleiben erhalten.', 'Runde archivieren')) return;
+            await runSessionAction(async () => { await api('/api/reset-round', { method: 'POST' }); notify('Runde archiviert. Bereit für neue Replays.'); });
         }
+        window.addEventListener('blur', stopSeek);
+        document.addEventListener('visibilitychange', () => { if (document.hidden) stopSeek(); });
     </script>
 
 </body>
