@@ -11,7 +11,7 @@ button:focus-visible,input:focus-visible,video:focus-visible{outline:2px solid v
 button{transition:background .15s,border-color .15s}
 button:hover{filter:brightness(1.15)}
 
-.panel-actions{display:flex;align-items:center;gap:14px}
+.panel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
 .status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
 .status:before{content:'';width:7px;height:7px;background:#d9a05b;border-radius:50%}
 .status.connected:before{background:var(--accent)}
@@ -23,9 +23,9 @@ p{margin:0;color:var(--muted)}
 .card{border:1px solid var(--line);background:var(--panel);border-radius:12px;overflow:hidden}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--line)}
 h2{font-size:13px;font-weight:600;margin:0}
-.video-container{position:relative;height:clamp(220px,40vh,560px);background:radial-gradient(ellipse at center,#1b2633,#080c11);display:grid;place-items:center}
+.video-container{position:relative;aspect-ratio:16/9;background:radial-gradient(ellipse at center,#1b2633,#080c11);display:grid;place-items:center}
 .empty-player{text-align:center;position:absolute;pointer-events:none}
-video{position:relative;width:100%;height:100%;max-height:65vh;display:block}
+video{position:relative;width:100%;height:100%;object-fit:contain;display:block}
 video:not([src]){visibility:hidden}
 .file-bar{padding:12px 18px;border-top:1px solid var(--line);font:12px monospace;color:var(--muted);overflow-wrap:anywhere}
 .controls{margin-top:18px;padding:20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px}
@@ -40,7 +40,7 @@ video:not([src]){visibility:hidden}
 .btn-gold{background:#293648;border-color:#425875}
 .btn-red{color:#f1aaa5;border-color:#62403f;background:#302022}
 .btn-small{font-size:11px;padding:7px 10px}
-.activity{margin-top:18px}
+.activity{margin-top:18px}.activity .section-head{flex-wrap:wrap}
 #status-log{height:112px;overflow-y:auto;padding:12px 18px;color:#a9b7c7;font:11px/1.9 Consolas,monospace}
 .side-panel{min-width:0}
 .library-header{padding:18px}
@@ -104,18 +104,7 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 </div>
 </div>
 </div>
-<section class="activity card">
-<div class="section-head">
-<h2>Aktivität</h2>
-<div class="panel-actions">
-<span id="connection-status" class="status" role="status">Regie verbindet...</span>
-<button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button>
-<button class="btn" onclick="openSettings()">Einstellungen</button>
-</div>
-</div>
-<div id="status-log" role="log" aria-label="Systemmeldungen">System bereit.<br>
-</div>
-</section>
+
 </section>
 <aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="card">
@@ -129,6 +118,18 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 <button class="btn btn-red btn-small" onclick="triggerReset()">Runde zurücksetzen</button>
 </div>
 </div>
+<section class="activity card">
+<div class="section-head">
+<h2>Aktivität</h2>
+<div class="panel-actions">
+<span id="connection-status" class="status" role="status">Regie verbindet...</span>
+<button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button>
+<button class="btn" onclick="openSettings()">Einstellungen</button>
+</div>
+</div>
+<div id="status-log" role="log" aria-label="Systemmeldungen">System bereit.<br>
+</div>
+</section>
 </aside>
 </div>
 </main>
