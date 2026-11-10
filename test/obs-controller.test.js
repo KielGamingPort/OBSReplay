@@ -70,3 +70,16 @@ test('settings cancel a pending handshake before waiting for it', async () => {
     assert.equal(controller.getSettings().url, 'ws://new:4455');
     controller.stop();
 });
+
+test('a stalled new handshake does not lock subsequent settings changes', async () => {
+    const client = new EventEmitter();
+    let rejectHandshake;
+    client.connect = () => new Promise((_resolve, reject) => { rejectHandshake = reject; });
+    client.disconnect = async () => { rejectHandshake?.(new Error('closed')); };
+    const controller = createObsController({ client, url: 'ws://old:4455' });
+    await controller.configure({ url: 'ws://stalled:4455' });
+    await controller.configure({ url: 'ws://corrected:4455' });
+    assert.equal(controller.getSettings().url, 'ws://corrected:4455');
+    controller.stop();
+    await client.disconnect();
+});
