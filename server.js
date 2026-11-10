@@ -178,10 +178,16 @@ app.get('/api/challonge/matches', async (req, res) => {
         res.json(matches);
     } catch { res.status(502).json({ error: 'Could not load Challonge matches' }); }
 });
+const { fetchMatch } = require('./lib/challonge');
 let transitionBusy = false;
 app.post('/api/match', async (req, res) => {
     if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: 'Replay operation in progress' });
-    const match = req.body;
+    let match = req.body;
+    if (match && Object.hasOwn(match, "tournamentId")) {
+        try { match = await fetchMatch(match.tournamentId, match.id); }
+        catch (error) { return res.status(error.status || 502).json({ error: error.status ? error.message : "Could not load Challonge data" }); }
+        if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: "Replay operation in progress" });
+    }
     if (!Number.isSafeInteger(match?.id) || match.id < 1 || !Number.isSafeInteger(match.number) || match.number < 1) return res.status(400).json({ error: 'Select a numbered Challonge match' });
     if (['tournament', 'team1', 'team2'].some(key => Object.hasOwn(match, key) && typeof match[key] !== 'string')) return res.status(400).json({ error: 'Tournament and team names must be strings' });
     transitionBusy = true;
