@@ -22,3 +22,5 @@ Companion-Aufrufe verwenden `POST` und senden das Token aus `.env` entweder als 
 ```powershell
 npm test
 ```
+
+OBS connection settings saved in the web interface persist across server restarts in .obs-settings.json in the application directory. Saved values override OBS_URL and OBS_PASSWORD defaults. Delete this file to return to environment defaults. The file contains the OBS password; restrict access to the application directory and include it only in private backups. A failed disk write is reported as a settings update failure.
