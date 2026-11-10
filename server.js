@@ -130,8 +130,8 @@ app.post('/api/remote/:command', (req, res) => {
 });
 
 // Liefert alle bisherigen Clips für die Web-Galerie
-app.get('/api/files', async (_req, res) => {
-    res.json(await listReplayFiles(RAW_DIR));
+app.get('/api/files', async (req, res) => {
+    res.json(await listReplayFiles(RAW_DIR, undefined, req.query.details === '1'));
 });
 
 // Probe the saved files so totals also include clips from earlier sessions.

@@ -78,7 +78,7 @@ test('rollback add events do not duplicate clips or change the selected video', 
     let loads = 0;
     const context = vm.createContext({
         clipList: { children, prepend: node => children.unshift(node), append: node => children.push(node) },
-        document: { createElement: () => ({ dataset: {} }) },
+        document: { createElement: () => ({ dataset: {}, append() {}, setAttribute() {} }) },
         socket: { on: (name, handler) => { handlers[name] = handler; } },
         logMessage() {},
         updateClipCount() {},

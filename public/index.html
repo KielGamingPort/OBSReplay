@@ -245,8 +245,8 @@
             document.getElementById('preview-selection').disabled = !ready || invalid || blocked;
             const inInput = document.getElementById('in-display');
             const outInput = document.getElementById('out-display');
-            inInput.value = inTime.toFixed(2);
-            outInput.value = outTime === null ? '' : outTime.toFixed(2);
+            if (document.activeElement !== inInput) inInput.value = inTime.toFixed(2);
+            if (document.activeElement !== outInput) outInput.value = outTime === null ? '' : outTime.toFixed(2);
             inInput.max = outInput.max = ready ? player.duration : 0;
         }
         function resetMarks() {
@@ -334,11 +334,11 @@
 
         // Lädt alle Clips vom Server in die rechte Leiste
         async function loadClipList() {
-            const res = await fetch('/api/files');
+            const res = await fetch('/api/files?details=1');
             if (!res.ok) throw new Error('Clips konnten nicht geladen werden.');
             const files = await res.json();
             clipList.innerHTML = '';
-            files.forEach(file => addClipToList(file, false));
+            files.forEach(file => addClipToList(file.name, false, file.modifiedAt));
             if (!files.length) clipList.innerHTML = '<div class="empty-library"><strong>Noch keine Replays</strong>Replay aufnehmen, sobald OBS verbunden ist. Neue Clips erscheinen automatisch hier.</div>';
             updateClipCount();
         }
@@ -373,14 +373,20 @@
             select.disabled = select.options.length === 1;
         }
 
-        function addClipToList(fileName, prepend = true) {
+        function addClipToList(fileName, prepend = true, modifiedAt = Date.now()) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;
             clipList.querySelector?.('.empty-library')?.remove();
             const div = document.createElement('button');
             div.type = 'button';
             div.dataset.fileName = fileName;
             div.className = 'clip-item';
-            div.innerText = fileName;
+            const name = document.createElement('span');
+            name.className = 'clip-name'; name.textContent = fileName;
+            const meta = document.createElement('span');
+            meta.className = 'clip-meta';
+            meta.textContent = new Date(modifiedAt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            div.append(name, meta);
+            div.setAttribute('aria-pressed', 'false');
             div.onclick = () => loadVideo(fileName, div);
             if (prepend) clipList.prepend(div);
             else clipList.append(div);
