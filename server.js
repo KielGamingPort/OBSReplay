@@ -9,6 +9,7 @@ const fs = require('fs');
 const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const { createAccessControl } = require('./lib/auth');
 const { archiveRound } = require('./lib/round-reset');
+const { isVideoFile } = require('./lib/video-files');
 const { createReplaySaveGuard } = require('./lib/replay-save-guard');
 const { createObsController } = require('./lib/obs-controller');
 const { readObsPassword } = require('./lib/environment');
@@ -140,6 +141,7 @@ chokidar.watch(RAW_DIR, {
     awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 200 }
 }).on('add', (filePath) => {
     const fileName = path.basename(filePath);
+    if (!isVideoFile(fileName)) return;
     console.log(`🎥 Neues Replay fertig: ${fileName}`);
     io.emit('new_replay_available', fileName);
 });
