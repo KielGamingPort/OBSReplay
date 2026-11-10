@@ -26,3 +26,10 @@ test('establishes an HTTP-only browser session', () => {
     const cookieValue = cookie.split(';')[0];
     assert.equal(access.requestIsAuthorized({ headers: { cookie: cookieValue } }), true);
 });
+
+test('rejects malformed percent-encoding in the session cookie without throwing', () => {
+    const access = createAccessControl(TOKEN);
+    assert.equal(access.requestIsAuthorized({
+        headers: { cookie: 'replay_session=%E0%A4%A' }
+    }), false);
+});
