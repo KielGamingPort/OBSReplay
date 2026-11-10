@@ -202,6 +202,9 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
                 const number = Number(prompt('Matchnummer: ' + matches.map(m => m.number).join(', ')));
                 const match = matches.find(m => m.number === number);
                 if (!match) throw new Error('Ungültige Matchnummer');
+                match.tournament = prompt('Turniername:', tournament) || tournament;
+                match.team1 = prompt('Team 1:') || 'Team1';
+                match.team2 = prompt('Team 2:') || 'Team2';
                 const result = await fetch('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(match) });
                 const state = await result.json();
                 if (!result.ok) throw new Error(state.error);
