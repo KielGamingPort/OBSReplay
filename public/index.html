@@ -3,12 +3,13 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>EVS Replay Regie</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
-            background-color: #1e1e1e;
+            background-color: #171b21;
             color: #fff;
             margin: 0;
             padding: 20px;
@@ -22,7 +23,7 @@
 
         .side-panel {
             flex: 1;
-            background: #2c3e50;
+            background: #222831;
             padding: 15px;
             border-radius: 8px;
             height: 90vh;
@@ -46,23 +47,23 @@
         }
 
         .btn-red {
-            background-color: #e74c3c;
+            background-color: #c95858;
             color: white;
         }
 
         .btn-blue {
-            background-color: #3498db;
+            background-color: #527fa9;
             color: white;
         }
 
         .btn-green {
-            background-color: #2ecc71;
+            background-color: #54896d;
             color: white;
             margin-right: 5px;
         }
 
         .btn-gold {
-            background-color: #f1c40f;
+            background-color: #c4a568;
             color: black;
         }
 
@@ -91,7 +92,7 @@
         }
 
         .time-box {
-            background: #1a252f;
+            background: #191f27;
             padding: 10px;
             border-radius: 4px;
             font-family: monospace;
@@ -104,13 +105,13 @@
             padding: 10px;
             border-radius: 8px;
             font-family: monospace;
-            color: #00ff00;
+            color: #a7b6a9;
             height: 100px;
             overflow-y: auto;
         }
 
         .clip-item {
-            background: #34495e;
+            background: #2b333e;
             padding: 10px;
             margin-bottom: 10px;
             border-radius: 4px;
@@ -121,8 +122,32 @@
 
         .clip-item:hover,
         .clip-item.active {
-            background: #3498db;
+            background: #527fa9;
         }
+        * { box-sizing: border-box; }
+        body { line-height: 1.5; padding: 24px; gap: 24px; }
+        .main-panel { min-width: 0; }
+        .side-panel { min-width: 250px; height: calc(100vh - 48px); border: 1px solid #323b47; padding: 18px; }
+        .header { align-items: center; gap: 16px; border-bottom: 1px solid #323b47; padding-bottom: 18px; }
+        h1 { font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -.4px; }
+        h3 { font-size: 15px; font-weight: 600; }
+        .btn { font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; transition: filter 150ms ease, background-color 150ms ease; }
+        .btn:hover { filter: brightness(1.12); }
+        .btn:active { filter: brightness(.92); }
+        .btn:focus-visible, .clip-item:focus-visible { outline: 2px solid #93b9df; outline-offset: 3px; }
+        .video-container { padding: 16px; border: 1px solid #303843; }
+        .controls { gap: 16px; flex-wrap: wrap; align-items: center; border: 1px solid #323b47; }
+        .time-box { color: #b9c4d2; font-size: 13px; }
+        #status-log { background: #13171c; border: 1px solid #303843; font-size: 12px; line-height: 1.7; }
+        .clip-item { padding: 12px; margin-bottom: 8px; border-radius: 6px; overflow-wrap: anywhere; word-break: normal; transition: background-color 150ms ease; }
+        .clip-item:hover { background: #354353; }
+        .clip-item.active { background: #365573; }
+        @media (max-width: 900px) {
+            body { flex-direction: column; padding: 16px; gap: 16px; }
+            .side-panel { height: auto; max-height: 400px; min-width: 0; }
+            .header { flex-wrap: wrap; }
+        }
+        @media (prefers-reduced-motion: reduce) { .btn, .clip-item { transition: none; } }
     </style>
 </head>
 
@@ -130,8 +155,8 @@
 
     <div class="main-panel">
         <div class="header">
-            <h1>🎙️ Replay Regie</h1>
-            <button class="btn btn-red" onclick="triggerReplay()">🔴 NEUEN CLIP SPEICHERN</button>
+            <h1>Replay Regie</h1><button class="btn btn-blue" onclick="openSettings()">Einstellungen</button>
+            <button class="btn btn-red" onclick="triggerReplay()">NEUEN CLIP SPEICHERN</button>
         </div>
 
         <div class="video-container">
@@ -145,8 +170,8 @@
                 <div class="time-box" id="in-display">IN: 0.00s</div>
             </div>
             <div style="text-align: center;">
-                <button class="btn btn-green" onclick="cutVideo('round')">➔ IN RUNDE</button>
-                <button class="btn btn-gold" onclick="cutVideo('match')">➔ IN MATCH</button>
+                <button class="btn btn-green" onclick="cutVideo('round')">IN RUNDE</button>
+                <button class="btn btn-gold" onclick="cutVideo('match')">IN MATCH</button>
             </div>
             <div>
                 <button class="btn btn-blue" onclick="setOut()">OUT-POINT ]</button>
@@ -164,16 +189,64 @@
     </div>
 
     <div class="side-panel">
-        <h3>📂 Gesammelte Clips</h3>
+        <h3>Gesammelte Clips</h3>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0;">📂 Gesammelte Clips</h3>
+            <h3 style="margin: 0;">Gesammelte Clips</h3>
             <button class="btn btn-red" style="padding: 5px 10px; font-size: 11px;" onclick="triggerReset()">RUNDE
                 RESET</button>
         </div>
         <div id="clip-list">Lade Clips...</div>
     </div>
 
+    <dialog id="settings" aria-labelledby="settings-title" style="background:#222831;color:white;border-radius:8px;max-width:90vw">
+      <form id="settings-form">
+        <h2 id="settings-title">OBS-Verbindung</h2>
+        <p><label>WebSocket-Adresse<br><input id="obs-url" type="url" required style="width:100%"></label></p>
+        <p><label>Passwort<br><input id="obs-password" type="password" autocomplete="new-password"></label></p>
+        <p>Leer lassen, um das Passwort beizubehalten.</p>
+        <p><label><input id="obs-clear" type="checkbox"> Passwort entfernen</label></p>
+        <p>Gilt bis zum nächsten Serverstart.</p>
+        <p id="settings-status" role="status"></p>
+        <button id="settings-save" class="btn btn-green">Übernehmen &amp; verbinden</button>
+        <button type="button" class="btn btn-blue" onclick="document.getElementById('settings').close()">Schließen</button>
+      </form>
+    </dialog>
     <script>
+        async function openSettings() {
+            document.getElementById('settings').showModal();
+            const button = document.getElementById('settings-save');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/obs-settings');
+                if (!response.ok) throw new Error('Bitte zuerst anmelden.');
+                const settings = await response.json();
+                document.getElementById('obs-url').value = settings.url;
+                document.getElementById('obs-password').value = '';
+                document.getElementById('obs-clear').checked = false;
+                document.getElementById('settings-status').textContent = '';
+                button.disabled = false;
+            } catch (error) { document.getElementById('settings-status').textContent = error.message; }
+        }
+        document.getElementById('settings-form').addEventListener('submit', async event => {
+            event.preventDefault();
+            const button = document.getElementById('settings-save');
+            const status = document.getElementById('settings-status');
+            const settings = { url: document.getElementById('obs-url').value.trim() };
+            const password = document.getElementById('obs-password').value;
+            if (document.getElementById('obs-clear').checked) settings.password = '';
+            else if (password) settings.password = password;
+            button.disabled = true;
+            status.textContent = 'Verbinde...';
+            try {
+                const response = await fetch('/api/obs-settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                document.getElementById('obs-password').value = '';
+                status.textContent = result.connected ? 'OBS verbunden.' : 'Gespeichert. Verbindung wird erneut versucht.';
+            } catch (error) { status.textContent = error.message; }
+            finally { button.disabled = false; }
+        });
+
         const socket = io({ autoConnect: false });
         const player = document.getElementById('player');
         const statusLog = document.getElementById('status-log');
@@ -257,14 +330,14 @@
         socket.on('replay_error', (message) => logMessage(`OBS: ${message}`));
         function triggerReplay() {
             socket.emit('trigger_replay', (result) => {
-                if (!result?.ok) logMessage(`❌ OBS: ${result?.error || 'Unbekannter Fehler'}`);
+                if (!result?.ok) logMessage(`OBS: ${result?.error || 'Unbekannter Fehler'}`);
             });
         }
         socket.on('obs_status', (status) => {
-            logMessage(status.connected ? '✅ OBS verbunden' : `⚠️ OBS getrennt${status.error ? `: ${status.error}` : ''}`);
+            logMessage(status.connected ? 'OBS verbunden' : `OBS getrennt${status.error ? `: ${status.error}` : ''}`);
         });
         socket.on('new_replay_available', (fileName) => {
-            logMessage("🎥 Neuer Clip: " + fileName);
+            logMessage("Neuer Clip: " + fileName);
             if (!addClipToList(fileName)) return;
             loadVideo(fileName, clipList.firstChild); // Direkt laden
         });
@@ -277,12 +350,12 @@
             if (outTime === 0) outTime = player.duration;
             if (inTime >= outTime) return alert("IN liegt nach OUT!");
 
-            logMessage(`✂️ Exportiere nach ${target.toUpperCase()}...`);
+            logMessage(`Exportiere nach ${target.toUpperCase()}...`);
             socket.emit('cut_video', { fileName: currentFileName, inTime, outTime, target });
         }
 
-        socket.on('cut_success', (data) => logMessage(`✅ Clip in ${data.target.toUpperCase()} gespeichert!`));
-        socket.on('cut_error', (err) => logMessage(`❌ FEHLER: ${err}`));
+        socket.on('cut_success', (data) => logMessage(`Clip in ${data.target.toUpperCase()} gespeichert!`));
+        socket.on('cut_error', (err) => logMessage(`FEHLER: ${err}`));
         // --- FERNSTEUERUNG VOM STREAM DECK EMPFANGEN ---
         socket.on('remote_command', (cmd) => {
             // Das zeigt dir im Browser an, dass der Befehl wirklich durchkam
@@ -366,7 +439,7 @@
 
         // Empfängt das Reset-Signal vom Server
         socket.on('reset_dashboard', () => {
-            logMessage('🧹 Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
+            logMessage('Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
 
             // Sidebar leeren
             clipList.innerHTML = '<div style="color: #77f; padding: 5px;">Keine Clips (Ordner leer)</div>';
@@ -388,7 +461,7 @@
                 const response = await fetch('/api/reset-round', { method: 'POST' });
                 if (!response.ok) {
                     const result = await response.json().catch(() => ({}));
-                    logMessage(`❌ Reset fehlgeschlagen: ${result.error || response.statusText}`);
+                    logMessage(`Reset fehlgeschlagen: ${result.error || response.statusText}`);
                 }
             }
         }
