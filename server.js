@@ -131,6 +131,34 @@ app.get('/api/files', async (_req, res) => {
     res.json(await listReplayFiles(RAW_DIR));
 });
 
+// Probe the saved files so totals also include clips from earlier sessions.
+app.get('/api/clip-durations', async (_req, res) => {
+    try {
+        const totals = {};
+        for (const [target, directory] of Object.entries({ round: HIGHLIGHTS_ROUND, match: HIGHLIGHTS_MATCH })) {
+            let seconds = 0;
+            const entries = await fs.promises.readdir(directory, { withFileTypes: true });
+            for (const entry of entries) {
+                if (!entry.isFile() || !isVideoFile(entry.name)) continue;
+                const duration = await new Promise((resolve, reject) => {
+                    execFile(process.env.FFPROBE_PATH || path.join(path.dirname(ffmpegPath), process.platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'),
+                        ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', path.join(directory, entry.name)],
+                        { windowsHide: true }, (error, stdout) => {
+                            const value = Number(stdout.trim());
+                            if (error || !stdout.trim() || !Number.isFinite(value) || value < 0) reject(error || new Error('Invalid video duration'));
+                            else resolve(value);
+                        });
+                });
+                seconds += duration;
+            }
+            totals[target] = seconds;
+        }
+        res.set('Cache-Control', 'no-store').json(totals);
+    } catch {
+        res.status(503).json({ error: 'Clip durations unavailable. Check FFPROBE_PATH.' });
+    }
+});
+
 // --- OBS VERBINDUNG ---
 obsController.start();
 
@@ -180,6 +208,7 @@ io.on('connection', (socket) => {
                 socket.emit('cut_error', error.message);
                 return;
             }
+            io.emit('clip_durations_changed');
             socket.emit('cut_success', { file: path.basename(outputFile), target: cut.target });
         });
         activeCuts.add(child);

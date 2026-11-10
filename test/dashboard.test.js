@@ -5,6 +5,31 @@ const test = require('node:test');
 
 const html = fs.readFileSync(require('node:path').join(__dirname, '../public/index.html'), 'utf8');
 
+for (const staleFailure of [false, true]) {
+    test(`duration refresh ignores stale ${staleFailure ? 'failures' : 'successes'} after reset`, async () => {
+        const requests = [];
+        const display = { textContent: '' };
+        const context = vm.createContext({
+            document: { getElementById: () => display },
+            fetch: () => new Promise((resolve, reject) => requests.push({ resolve, reject }))
+        });
+        vm.runInContext(html.match(/        let durationRequestGeneration[\s\S]*?(?=        socket.on\('clip_durations_changed')/)[0], context);
+        const older = vm.runInContext('loadClipDurations()', context);
+        const newer = vm.runInContext('loadClipDurations()', context);
+        requests[1].resolve({ ok: true, json: async () => ({ round: 0, match: 3661 }) });
+        await newer;
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01');
+        if (staleFailure) requests[0].reject(new Error('old failure'));
+        else requests[0].resolve({ ok: true, json: async () => ({ round: 10, match: 20 }) });
+        await older;
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01');
+        const failed = vm.runInContext('loadClipDurations()', context);
+        requests[2].resolve({ ok: false });
+        await failed;
+        assert.equal(display.textContent, 'Cliplängen nicht verfügbar');
+    });
+}
+
 for (const scenario of [
     { name: 'local or existing session', status: 204, prompts: 0, connections: 1 },
     { name: 'remote client without a session', status: 401, prompts: 1, connections: 1 },
@@ -26,7 +51,8 @@ for (const scenario of [
             requestAccessToken: async () => { prompts++; return 'test-token'; },
             document: { getElementById: () => ({ hidden: true }) },
             socket: { connect: () => { connections++; } },
-            loadClipList: async () => { loads++; }
+            loadClipList: async () => { loads++; },
+            loadClipDurations: async () => {}
         });
         vm.runInContext(html.match(/        async function authenticate\(\)[\s\S]*?(?=        \/\/)/)[0], context);
         const result = vm.runInContext('authenticate()', context);

@@ -97,6 +97,7 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 <div class="export">
 <div>
 <h2>Auswahl sichern</h2>
+<p id="clip-durations" role="status">Runde: … · Match: …</p>
 </div>
 <div class="export-buttons">
 <button class="btn btn-green" onclick="cutVideo('round')">In Runde speichern</button>
@@ -270,7 +271,7 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
             }
             document.getElementById('login-retry').hidden = true;
             socket.connect();
-            try { await loadClipList(); }
+            try { await loadClipList(); await loadClipDurations(); }
             catch (error) {
                 logMessage(error.message);
                 clipList.innerHTML = '<div class="empty-library">Clips konnten nicht geladen werden. Seite neu laden.</div>';
@@ -287,6 +288,26 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
             if (!files.length) clipList.innerHTML = '<div class="empty-library">Keine Clips vorhanden.</div>';
         }
         authenticate().catch(showAuthError);
+
+        let durationRequestGeneration = 0;
+        async function loadClipDurations() {
+            const generation = ++durationRequestGeneration;
+            const display = document.getElementById('clip-durations');
+            try {
+                const response = await fetch('/api/clip-durations');
+                if (!response.ok) throw new Error();
+                const totals = await response.json();
+                if (generation !== durationRequestGeneration) return;
+                const format = seconds => {
+                    const rounded = Math.round(seconds);
+                    return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
+                };
+                display.textContent = `Runde: ${format(totals.round)} · Match: ${format(totals.match)}`;
+            } catch {
+                if (generation === durationRequestGeneration) display.textContent = 'Cliplängen nicht verfügbar';
+            }
+        }
+        socket.on('clip_durations_changed', loadClipDurations);
 
         function addClipToList(fileName, prepend = true) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;
@@ -331,6 +352,7 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
         socket.on('disconnect', () => { document.getElementById('connection-status').textContent = 'Regie getrennt'; document.getElementById('connection-status').classList.remove('connected'); });
         socket.on('connect_error', () => { document.getElementById('connection-status').textContent = 'Regie nicht erreichbar'; });
         socket.on('obs_status', (status) => {
+            loadClipDurations();
             const badge = document.getElementById('connection-status');
             badge.textContent = status.connected ? 'OBS verbunden' : 'OBS getrennt';
             badge.classList.toggle('connected', status.connected);
@@ -439,6 +461,7 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 
         // Empfängt das Reset-Signal vom Server
         socket.on('reset_dashboard', () => {
+            loadClipDurations();
             logMessage('Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
 
             document.getElementById('empty-player').hidden = false;
