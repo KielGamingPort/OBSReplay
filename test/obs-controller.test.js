@@ -65,7 +65,8 @@ test('settings cancel a pending handshake before waiting for it', async () => {
     const controller = createObsController({ client, url: 'ws://old:4455' });
     controller.start();
     const status = await controller.configure({ url: 'ws://new:4455' });
-    assert.equal(status.connected, true);
+    await new Promise(setImmediate);
+    assert.equal(controller.getStatus().connected, true);
     assert.equal(attempts, 2);
     assert.equal(controller.getSettings().url, 'ws://new:4455');
     controller.stop();
