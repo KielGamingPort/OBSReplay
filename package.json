@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "chokidar": "^6.0.0",
+    "express": "^5.3.0",
+    "obs-websocket-js": "^5.0.8",
+    "osc": "^2.4.5",
+    "socket.io": "^4.8.4"
+  }
+}
