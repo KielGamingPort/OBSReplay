@@ -53,3 +53,34 @@ test('publishes disconnects and schedules a reconnect', async () => {
     assert.equal(statuses.at(-1).connected, false);
     assert.equal(scheduled.at(-1).delay, 1000);
 });
+
+test('settings cancel a pending handshake before waiting for it', async () => {
+    const client = new EventEmitter();
+    let rejectHandshake;
+    let attempts = 0;
+    client.connect = () => ++attempts === 1
+        ? new Promise((_resolve, reject) => { rejectHandshake = reject; })
+        : Promise.resolve();
+    client.disconnect = async () => { rejectHandshake(new Error('closed')); };
+    const controller = createObsController({ client, url: 'ws://old:4455' });
+    controller.start();
+    const status = await controller.configure({ url: 'ws://new:4455' });
+    await new Promise(setImmediate);
+    assert.equal(controller.getStatus().connected, true);
+    assert.equal(attempts, 2);
+    assert.equal(controller.getSettings().url, 'ws://new:4455');
+    controller.stop();
+});
+
+test('a stalled new handshake does not lock subsequent settings changes', async () => {
+    const client = new EventEmitter();
+    let rejectHandshake;
+    client.connect = () => new Promise((_resolve, reject) => { rejectHandshake = reject; });
+    client.disconnect = async () => { rejectHandshake?.(new Error('closed')); };
+    const controller = createObsController({ client, url: 'ws://old:4455' });
+    await controller.configure({ url: 'ws://stalled:4455' });
+    await controller.configure({ url: 'ws://corrected:4455' });
+    assert.equal(controller.getSettings().url, 'ws://corrected:4455');
+    controller.stop();
+    await client.disconnect();
+});

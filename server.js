@@ -76,6 +76,16 @@ function requireHttpAuth(req, res, next) {
 }
 
 app.use('/api', requireHttpAuth);
+app.get('/api/obs-settings', (_req, res) => res.json(obsController.getSettings()));
+app.put('/api/obs-settings', async (req, res) => {
+    const { url, password } = req.body || {};
+    try {
+        const parsed = new URL(url);
+        if (typeof url !== 'string' || !['ws:', 'wss:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash || (password !== undefined && typeof password !== 'string')) throw new Error();
+    } catch { return res.status(400).json({ error: 'Invalid WebSocket URL or password.' }); }
+    try { res.json(await obsController.configure({ url, password })); }
+    catch (error) { res.status(error.statusCode || 500).json({ error: 'Could not update OBS connection.' }); }
+});
 app.use('/raw_videos', requireHttpAuth, express.static(RAW_DIR));
 
 io.use((socket, next) => {
