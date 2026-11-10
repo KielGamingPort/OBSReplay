@@ -48,8 +48,8 @@ const obsController = createObsController({
     ...settingsStore.get(),
     onStatus(status) {
         io.emit('obs_status', status);
-        if (status.connected) console.log('✅ Erfolgreich mit OBS verbunden!');
-        else if (status.error) console.error('❌ OBS Verbindungsfehler:', status.error);
+        if (status.connected) console.log(' Erfolgreich mit OBS verbunden!');
+        else if (status.error) console.error(' OBS Verbindungsfehler:', status.error);
     }
 });
 const access = createAccessControl(CONTROL_TOKEN);
@@ -104,7 +104,7 @@ io.use((socket, next) => {
 // --- NEU: STREAM DECK / COMPANION API ---
 // Wenn Companion diese URL aufruft, speichert OBS den Puffer
 app.post('/api/save-buffer', async (req, res) => {
-    console.log('🕹️ Stream Deck Befehl: Replay speichern');
+    console.log(' Stream Deck Befehl: Replay speichern');
     try {
         await replaySaveGuard.saveReplay();
         res.send('OK');
@@ -119,7 +119,7 @@ app.post('/api/remote/:command', (req, res) => {
         res.status(400).json({ error: 'Unbekannter Fernsteuerungsbefehl.' });
         return;
     }
-    console.log(`🕹️ Stream Deck Fernsteuerung: ${cmd}`);
+    console.log(` Stream Deck Fernsteuerung: ${cmd}`);
     // Leitet den Befehl live an den Webbrowser weiter
     io.emit('remote_command', cmd);
     res.send('OK');
@@ -142,7 +142,7 @@ chokidar.watch(RAW_DIR, {
 }).on('add', (filePath) => {
     const fileName = path.basename(filePath);
     if (!isVideoFile(fileName)) return;
-    console.log(`🎥 Neues Replay fertig: ${fileName}`);
+    console.log(` Neues Replay fertig: ${fileName}`);
     io.emit('new_replay_available', fileName);
 });
 
@@ -171,7 +171,7 @@ io.on('connection', (socket) => {
         const targetDir = cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
         const outputFile = path.join(targetDir, `${cut.prefix}${Date.now()}.mp4`);
 
-        console.log(`✂️ Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
+        console.log(` Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
 
         const child = execFile(ffmpegPath, buildFfmpegArgs(cut, outputFile), { windowsHide: true }, (error) => {
             activeCuts.delete(child);
@@ -186,7 +186,7 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, HOST, () => {
-    console.log(`🚀 System läuft auf http://${HOST}:${PORT}`);
+    console.log(` System läuft auf http://${HOST}:${PORT}`);
 });
 // --- OSC FERNSTEUERUNG FÜR COMPANION ---
 const osc = require('osc');
@@ -197,7 +197,7 @@ const udpPort = new osc.UDPPort({
 });
 
 udpPort.on("message", function (oscMsg) {
-    console.log("🕹️ OSC Befehl empfangen:", oscMsg.address);
+    console.log(" OSC Befehl empfangen:", oscMsg.address);
 
     // Routen der OSC-Adressen zu unseren Funktionen
     if (oscMsg.address === "/replay/save") {
@@ -220,7 +220,7 @@ udpPort.on("message", function (oscMsg) {
     } else if (oscMsg.address === "/replay/seek/stop") {
         io.emit('remote_command', 'seek-stop');
     } else if (oscMsg.address === "/replay/reset") {
-        performRoundReset().catch(err => console.error('❌ Fehler beim Runden-Reset:', err.message));
+        performRoundReset().catch(err => console.error(' Fehler beim Runden-Reset:', err.message));
     }
 });
 
@@ -233,7 +233,7 @@ async function performRoundReset() {
     }
 
     replaySaveGuard.beginReset();
-    console.log('🧹 Starte Runden-Reset...');
+    console.log(' Starte Runden-Reset...');
     try {
         const result = await archiveRound({
             rawDirectory: RAW_DIR,
@@ -241,7 +241,7 @@ async function performRoundReset() {
             backupDirectory: BACKUP_DIR
         });
         io.emit('reset_dashboard');
-        console.log(`✅ Runden-Reset erfolgreich abgeschlossen: ${result.backupPath}`);
+        console.log(` Runden-Reset erfolgreich abgeschlossen: ${result.backupPath}`);
         return result;
     } finally {
         replaySaveGuard.endReset();
@@ -254,7 +254,7 @@ app.post('/api/reset-round', async (_req, res) => {
         const result = await performRoundReset();
         res.json(result);
     } catch (error) {
-        console.error('❌ Fehler beim Runden-Reset:', error.message);
+        console.error(' Fehler beim Runden-Reset:', error.message);
         res.status(error.statusCode || 500).json({ error: error.message });
     }
 });
