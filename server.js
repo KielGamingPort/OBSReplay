@@ -13,6 +13,7 @@ const { createReplaySaveGuard } = require('./lib/replay-save-guard');
 const { createObsController } = require('./lib/obs-controller');
 const { readObsPassword } = require('./lib/environment');
 const { handleReplayTrigger } = require('./lib/replay-trigger');
+const { listReplayFiles } = require('./lib/replay-files');
 
 // --- KONFIGURATION ---
 const OBS_PASSWORD = readObsPassword();
@@ -110,9 +111,8 @@ app.post('/api/remote/:command', (req, res) => {
 });
 
 // Liefert alle bisherigen Clips für die Web-Galerie
-app.get('/api/files', (req, res) => {
-    const files = fs.readdirSync(RAW_DIR).filter(f => f.endsWith('.mp4'));
-    res.json(files);
+app.get('/api/files', async (_req, res) => {
+    res.json(await listReplayFiles(RAW_DIR));
 });
 
 // --- OBS VERBINDUNG ---

@@ -219,18 +219,19 @@
             const res = await fetch('/api/files');
             const files = await res.json();
             clipList.innerHTML = '';
-            files.reverse().forEach(file => addClipToList(file)); // Neueste oben
+            files.forEach(file => addClipToList(file, false)); // Neueste oben
         }
         authenticate().catch((error) => logMessage(error.message));
 
-        function addClipToList(fileName) {
+        function addClipToList(fileName, prepend = true) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;
             const div = document.createElement('div');
             div.dataset.fileName = fileName;
             div.className = 'clip-item';
             div.innerText = fileName;
             div.onclick = () => loadVideo(fileName, div);
-            clipList.prepend(div);
+            if (prepend) clipList.prepend(div);
+            else clipList.append(div);
             return true;
         }
 
