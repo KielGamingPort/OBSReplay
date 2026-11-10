@@ -183,6 +183,7 @@ app.post('/api/match', async (req, res) => {
     if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: 'Replay operation in progress' });
     const match = req.body;
     if (!Number.isSafeInteger(match?.id) || match.id < 1 || !Number.isSafeInteger(match.number) || match.number < 1) return res.status(400).json({ error: 'Select a numbered Challonge match' });
+    if (['tournament', 'team1', 'team2'].some(key => Object.hasOwn(match, key) && typeof match[key] !== 'string')) return res.status(400).json({ error: 'Tournament and team names must be strings' });
     transitionBusy = true;
     try {
         if (!matchStore.hasPending()) await performRoundReset();
@@ -261,15 +262,15 @@ io.on('connection', (socket) => {
         }
 
         let cut;
+        let outputFile;
         try {
             cut = validateCutRequest(data, RAW_DIR);
+            const targetDir = cut.directoryKey === 'map' ? HIGHLIGHTS_MAP : cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
+            outputFile = path.join(targetDir, clipName(matchStore.get(), cut.prefix));
         } catch (error) {
             socket.emit('cut_error', error.message);
             return;
         }
-
-        const targetDir = cut.directoryKey === 'map' ? HIGHLIGHTS_MAP : cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
-        const outputFile = path.join(targetDir, clipName(matchStore.get(), cut.prefix));
 
         console.log(` Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
 
