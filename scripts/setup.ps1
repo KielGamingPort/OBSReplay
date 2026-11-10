@@ -77,13 +77,13 @@ try {
         $controlToken = [Convert]::ToBase64String($tokenBytes)
         $obsPasswordBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ObsPassword))
         $ffmpegValue = $ffmpegCommand.Source
-        $lines = @(
-            'REPLAY_ROOT=' + (ConvertTo-EnvironmentValue $ReplayRoot),
-            'HOST=' + (ConvertTo-EnvironmentValue $BindAddress),
-            'PORT=3000',
-            'OSC_HOST=' + (ConvertTo-EnvironmentValue $BindAddress),
-            'CONTROL_TOKEN=' + (ConvertTo-EnvironmentValue $controlToken),
-            'OBS_PASSWORD_BASE64=' + (ConvertTo-EnvironmentValue $obsPasswordBase64),
+        [string[]]$lines = @(
+            'REPLAY_ROOT=' + (ConvertTo-EnvironmentValue $ReplayRoot)
+            'HOST=' + (ConvertTo-EnvironmentValue $BindAddress)
+            'PORT=3000'
+            'OSC_HOST=' + (ConvertTo-EnvironmentValue $BindAddress)
+            'CONTROL_TOKEN=' + (ConvertTo-EnvironmentValue $controlToken)
+            'OBS_PASSWORD_BASE64=' + (ConvertTo-EnvironmentValue $obsPasswordBase64)
             'FFMPEG_PATH=' + (ConvertTo-EnvironmentValue $ffmpegValue)
         )
         [System.IO.File]::WriteAllLines($environmentFile, $lines, [System.Text.UTF8Encoding]::new($false))
