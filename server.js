@@ -218,6 +218,25 @@ app.post('/api/next-map', async (_req, res) => {
     finally { transitionBusy = false; }
 });
 
+app.post('/api/end-tournament', async (_req, res) => {
+    if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: 'Replay operation in progress' });
+    transitionBusy = true;
+    replaySaveGuard.beginReset();
+    const exportPath = path.join(REPLAY_ROOT, 'Exports', `Tournament_${Date.now()}`);
+    try {
+        await fs.promises.mkdir(exportPath, { recursive: true });
+        const matches = path.join(REPLAY_ROOT, 'Matches');
+        if (fs.existsSync(matches)) await fs.promises.cp(matches, path.join(exportPath, 'Matches'), { recursive: true });
+        if (fs.existsSync(BACKUP_DIR)) await fs.promises.cp(BACKUP_DIR, path.join(exportPath, 'Rounds'), { recursive: true });
+        for (const [name, directory] of Object.entries({ Raw: RAW_DIR, Round: HIGHLIGHTS_ROUND, Match: HIGHLIGHTS_MATCH, Map: HIGHLIGHTS_MAP })) {
+            await fs.promises.cp(directory, path.join(exportPath, 'Current', name), { recursive: true });
+        }
+        await fs.promises.writeFile(path.join(exportPath, 'manifest.json'), JSON.stringify({ ...matchState, exportedAt: new Date().toISOString(), complete: true }, null, 2));
+        res.json({ exportPath });
+    } catch { res.status(500).json({ error: 'Export failed; source clips retained. Only exports with manifest.json are complete.' }); }
+    finally { replaySaveGuard.endReset(); transitionBusy = false; }
+});
+
 // --- OBS VERBINDUNG ---
 obsController.start();
 

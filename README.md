@@ -28,3 +28,9 @@ npm test
 The dashboard accepts MP4, MKV, MOV and M4V replay containers with browser-compatible codecs (such as H.264/AAC). FLV and MPEG-TS must be remuxed to MP4 in OBS before use; they are excluded because the browser player cannot load those containers.
 
 OBS connection settings saved in the web interface persist across server restarts in .obs-settings.json in the application directory. Saved values override OBS_URL and OBS_PASSWORD defaults. Delete this file to return to environment defaults. The file contains the OBS password; restrict access to the application directory and include it only in private backups. A failed disk write is reported as a settings update failure.
+
+## Match and map workflow
+
+Set CHALLONGE_API_KEY in the server environment. Match setup loads numbered matches from the Challonge v1 API using a tournament ID (community tournaments use community-slug). Selecting a new match archives current clips and resets the map counter to 1. Next map archives round/raw and map clips, then increments the map counter. Match clips survive map transitions.
+
+End tournament exports all archived matches, rounds, and current clips under REPLAY_ROOT/Exports. A manifest.json marks a completed export. Source files are retained, and failures can be retried. The export contains individual clips, not concatenated videos.

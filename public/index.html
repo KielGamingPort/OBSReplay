@@ -89,7 +89,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </section>
 <aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="controls card">
-<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><button class="btn" onclick="nextMap()">N?chste Map</button><span id="match-state">Match: ?</span></div>
+<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><button class="btn" onclick="endTournament()">Turnier exportieren</button><button class="btn" onclick="nextMap()">N?chste Map</button><span id="match-state">Match: ?</span></div>
 <div class="mark">
 <button class="btn" onclick="setIn()">IN setzen</button>
 <div class="time-box" id="in-display">IN: 0.00s</div>
@@ -175,6 +175,14 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </form>
 </dialog>
     <script>
+        async function endTournament() {
+            try {
+                const response = await fetch('/api/end-tournament', { method: 'POST' });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                logMessage('Turnier exportiert: ' + result.exportPath);
+            } catch (error) { logMessage(error.message); }
+        }
         async function nextMap() {
             try {
                 const response = await fetch('/api/next-map', { method: 'POST' });
