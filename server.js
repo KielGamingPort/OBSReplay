@@ -6,6 +6,7 @@ const chokidar = require('chokidar');
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { clipName } = require('./lib/clip-name');
 const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const { createAccessControl } = require('./lib/auth');
 const { archiveRound } = require('./lib/round-reset');
@@ -268,7 +269,7 @@ io.on('connection', (socket) => {
         }
 
         const targetDir = cut.directoryKey === 'map' ? HIGHLIGHTS_MAP : cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
-        const outputFile = path.join(targetDir, `${cut.prefix}${Date.now()}.mp4`);
+        const outputFile = path.join(targetDir, clipName(matchStore.get(), cut.prefix));
 
         console.log(` Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
 
