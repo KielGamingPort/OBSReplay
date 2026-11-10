@@ -161,9 +161,9 @@ app.get('/api/clip-durations', async (_req, res) => {
 });
 
 // Match state is stored on disk before acknowledging a transition.
-const stateFile = path.join(REPLAY_ROOT, 'match-state.json');
-let matchState = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : { match: null, map: 1 };
-app.get('/api/match', (_req, res) => res.json(matchState));
+const { createMatchStore } = require('./lib/match-state');
+const matchStore = createMatchStore(REPLAY_ROOT, HIGHLIGHTS_MATCH, fs, HIGHLIGHTS_MAP);
+app.get('/api/match', (_req, res) => res.json(matchStore.get()));
 app.get('/api/challonge/matches', async (req, res) => {
     const tournament = req.query.tournament;
     if (typeof tournament !== 'string' || !/^[\w-]+$/.test(tournament)) return res.status(400).json({ error: 'Invalid tournament ID' });
@@ -184,18 +184,12 @@ app.post('/api/match', async (req, res) => {
     if (!Number.isSafeInteger(match?.id) || match.id < 1 || !Number.isSafeInteger(match.number) || match.number < 1) return res.status(400).json({ error: 'Select a numbered Challonge match' });
     transitionBusy = true;
     try {
-        await performRoundReset();
-        const archive = path.join(REPLAY_ROOT, 'Matches', `Match_${matchState.match?.id || 'unassigned'}_${Date.now()}`);
-        await fs.promises.cp(HIGHLIGHTS_MATCH, path.join(archive, 'Match'), { recursive: true });
-        await fs.promises.cp(HIGHLIGHTS_MAP, path.join(archive, `Map_${matchState.map}`), { recursive: true });
-        const next = { match, map: 1 };
-        await fs.promises.writeFile(stateFile + '.tmp', JSON.stringify(next));
-        await fs.promises.rename(stateFile + '.tmp', stateFile);
-        matchState = next;
-        for (const entry of await fs.promises.readdir(HIGHLIGHTS_MAP)) if (isVideoFile(entry)) await fs.promises.unlink(path.join(HIGHLIGHTS_MAP, entry));
-        for (const entry of await fs.promises.readdir(HIGHLIGHTS_MATCH)) if (isVideoFile(entry)) await fs.promises.unlink(path.join(HIGHLIGHTS_MATCH, entry));
-        io.emit('match_state', matchState);
-        res.json(matchState);
+        if (!matchStore.hasPending()) await performRoundReset();
+        await matchStore.transition(match);
+        io.emit('match_state', matchStore.get());
+        io.emit('clip_durations_changed');
+        res.json(matchStore.get());
+
     } catch { res.status(500).json({ error: 'Match transition failed; archived clips retained' }); }
     finally { transitionBusy = false; }
 });
@@ -204,16 +198,11 @@ app.post('/api/next-map', async (_req, res) => {
     if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: 'Replay operation in progress' });
     transitionBusy = true;
     try {
-        await performRoundReset();
-        await fs.promises.cp(HIGHLIGHTS_MAP, path.join(REPLAY_ROOT, 'Matches', `Match_${matchState.match?.id || 'unassigned'}`, `Map_${matchState.map}_${Date.now()}`), { recursive: true });
-        const next = { ...matchState, map: matchState.map + 1 };
-        await fs.promises.writeFile(stateFile + '.tmp', JSON.stringify(next));
-        await fs.promises.rename(stateFile + '.tmp', stateFile);
-        matchState = next;
-        for (const entry of await fs.promises.readdir(HIGHLIGHTS_MAP)) if (isVideoFile(entry)) await fs.promises.unlink(path.join(HIGHLIGHTS_MAP, entry));
-        io.emit('match_state', matchState);
+        if (!matchStore.hasPending()) await performRoundReset();
+        await matchStore.nextMap();
+        io.emit('match_state', matchStore.get());
         io.emit('clip_durations_changed');
-        res.json(matchState);
+        res.json(matchStore.get());
     } catch { res.status(500).json({ error: 'Map transition failed; archive retained' }); }
     finally { transitionBusy = false; }
 });
@@ -243,7 +232,7 @@ io.on('connection', (socket) => {
     ));
 
     socket.on('cut_video', (data) => {
-        if (transitionBusy || replaySaveGuard.isResetInProgress()) {
+        if (transitionBusy || matchStore.hasPending() || replaySaveGuard.isResetInProgress()) {
             socket.emit('cut_error', 'Während des Runden-Resets kann kein Schnitt gestartet werden.');
             return;
         }
@@ -315,7 +304,7 @@ udpPort.on("message", function (oscMsg) {
 
 // --- RUNDEN-RESET & ARCHIVIERUNG ---
 async function performRoundReset() {
-    if (activeCuts.size > 0) {
+    if (matchStore.hasPending() || activeCuts.size > 0) {
         const error = new Error('Der Runden-Reset wartet auf laufende Video-Schnitte.');
         error.statusCode = 409;
         throw error;
