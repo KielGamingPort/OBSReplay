@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <title>EVS Replay Regie</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #1e1e1e;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .main-panel {
+            flex: 3;
+        }
+
+        .side-panel {
+            flex: 1;
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 8px;
+            height: 90vh;
+            overflow-y: auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-red {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .btn-blue {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-green {
+            background-color: #2ecc71;
+            color: white;
+            margin-right: 5px;
+        }
+
+        .btn-gold {
+            background-color: #f1c40f;
+            color: black;
+        }
+
+        .video-container {
+            background: #000;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        video {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .time-box {
+            background: #1a252f;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        #status-log {
+            background: #111;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            color: #00ff00;
+            height: 100px;
+            overflow-y: auto;
+        }
+
+        .clip-item {
+            background: #34495e;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            word-break: break-all;
+        }
+
+        .clip-item:hover,
+        .clip-item.active {
+            background: #3498db;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main-panel">
+        <div class="header">
+            <h1>🎙️ Replay Regie</h1>
+            <button class="btn btn-red" onclick="triggerReplay()">🔴 NEUEN CLIP SPEICHERN</button>
+        </div>
+
+        <div class="video-container">
+            <h3 id="current-file" style="margin-top: 0; color: #aaa;">Kein Clip geladen</h3>
+            <video id="player" controls></video>
+        </div>
+
+        <div class="controls">
+            <div>
+                <button class="btn btn-blue" onclick="setIn()">[ IN-POINT</button>
+                <div class="time-box" id="in-display">IN: 0.00s</div>
+            </div>
+            <div style="text-align: center;">
+                <button class="btn btn-green" onclick="cutVideo('round')">➔ IN RUNDE</button>
+                <button class="btn btn-gold" onclick="cutVideo('match')">➔ IN MATCH</button>
+            </div>
+            <div>
+                <button class="btn btn-blue" onclick="setOut()">OUT-POINT ]</button>
+                <div class="time-box" id="out-display">OUT: Ende</div>
+            </div>
+            <div style="text-align: center; margin-bottom: 10px;">
+                <button class="btn btn-gold" onmousedown="startRW()" onmouseup="stopSeek()"
+                    onmouseleave="stopSeek()">&laquo; REWIND</button>
+                <button class="btn btn-gold" onmousedown="startFF()" onmouseup="stopSeek()"
+                    onmouseleave="stopSeek()">FAST FWD &raquo;</button>
+            </div>
+        </div>
+
+        <div id="status-log">System bereit...<br></div>
+    </div>
+
+    <div class="side-panel">
+        <h3>📂 Gesammelte Clips</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0;">📂 Gesammelte Clips</h3>
+            <button class="btn btn-red" style="padding: 5px 10px; font-size: 11px;" onclick="triggerReset()">RUNDE
+                RESET</button>
+        </div>
+        <div id="clip-list">Lade Clips...</div>
+    </div>
+
+    <script>
+        const socket = io();
+        const player = document.getElementById('player');
+        const statusLog = document.getElementById('status-log');
+        const clipList = document.getElementById('clip-list');
+
+        let currentFileName = null;
+        let inTime = 0;
+        let outTime = 0;
+        let seekInterval;
+        let seekMultiplier = 1;
+        let isSeeking = false;
+        let wasPlaying = false;
+
+        function logMessage(msg) {
+            statusLog.innerHTML += msg + "<br>";
+            statusLog.scrollTop = statusLog.scrollHeight;
+        }
+
+        // Lädt alle Clips vom Server in die rechte Leiste
+        async function loadClipList() {
+            const res = await fetch('/api/files');
+            const files = await res.json();
+            clipList.innerHTML = '';
+            files.reverse().forEach(file => addClipToList(file)); // Neueste oben
+        }
+        loadClipList();
+
+        function addClipToList(fileName) {
+            const div = document.createElement('div');
+            div.className = 'clip-item';
+            div.innerText = fileName;
+            div.onclick = () => loadVideo(fileName, div);
+            clipList.prepend(div);
+        }
+
+        function loadVideo(fileName, element = null) {
+            currentFileName = fileName;
+            document.getElementById('current-file').innerText = "Schneide: " + fileName;
+
+            // Aktiven Clip in der Liste farblich markieren
+            document.querySelectorAll('.clip-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+
+            player.pause();
+            player.removeAttribute('src');
+            player.load();
+            player.src = "/raw_videos/" + encodeURIComponent(fileName);
+            player.load();
+
+            inTime = 0; outTime = 0;
+            document.getElementById('in-display').innerText = "IN: 0.00s";
+            document.getElementById('out-display').innerText = "OUT: Ende";
+        }
+
+        function triggerReplay() { socket.emit('trigger_replay'); }
+        socket.on('new_replay_available', (fileName) => {
+            logMessage("🎥 Neuer Clip: " + fileName);
+            addClipToList(fileName);
+            loadVideo(fileName, clipList.firstChild); // Direkt laden
+        });
+
+        function setIn() { inTime = player.currentTime; document.getElementById('in-display').innerText = `IN: ${inTime.toFixed(2)}s`; }
+        function setOut() { outTime = player.currentTime; document.getElementById('out-display').innerText = `OUT: ${outTime.toFixed(2)}s`; }
+
+        function cutVideo(target) {
+            if (!currentFileName) return alert("Kein Video geladen!");
+            if (outTime === 0) outTime = player.duration;
+            if (inTime >= outTime) return alert("IN liegt nach OUT!");
+
+            logMessage(`✂️ Exportiere nach ${target.toUpperCase()}...`);
+            socket.emit('cut_video', { fileName: currentFileName, inTime, outTime, target });
+        }
+
+        socket.on('cut_success', (data) => logMessage(`✅ Clip in ${data.target.toUpperCase()} gespeichert!`));
+        socket.on('cut_error', (err) => logMessage(`❌ FEHLER: ${err}`));
+        // --- FERNSTEUERUNG VOM STREAM DECK EMPFANGEN ---
+        socket.on('remote_command', (cmd) => {
+            // Das zeigt dir im Browser an, dass der Befehl wirklich durchkam
+            logMessage(`<span style="color:#f39c12">Stream Deck Befehl: ${cmd}</span>`);
+
+            if (cmd === 'set-in') setIn();
+            else if (cmd === 'set-out') setOut();
+            else if (cmd === 'cut-round') cutVideo('round');
+            else if (cmd === 'cut-match') cutVideo('match');
+            else if (cmd === 'play-pause') {
+                if (player.paused) player.play();
+                else player.pause();
+            }
+            else if (cmd === 'next-clip') selectNextClip();
+            else if (cmd === 'prev-clip') selectPrevClip();
+            else if (cmd === 'ff-start') startFF();
+            else if (cmd === 'rw-start') startRW();
+            else if (cmd === 'seek-stop') stopSeek();
+        });
+
+        // --- NAVIGATION ---
+        function selectNextClip() {
+            const items = Array.from(document.querySelectorAll('.clip-item'));
+            if (items.length === 0) return;
+            const currentIndex = items.findIndex(el => el.classList.contains('active'));
+            const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+            items[nextIndex].click();
+        }
+
+        function selectPrevClip() {
+            const items = Array.from(document.querySelectorAll('.clip-item'));
+            if (items.length === 0) return;
+            const currentIndex = items.findIndex(el => el.classList.contains('active'));
+            const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+            items[prevIndex].click();
+        }
+
+        // --- DYNAMISCHES SPULEN ---
+        function startFF() {
+            if (isSeeking) return;
+            isSeeking = true;
+            wasPlaying = !player.paused;
+            seekMultiplier = 2.0; // Startet bei 2-facher Geschwindigkeit
+
+            player.play();
+            player.playbackRate = seekMultiplier;
+
+            seekInterval = setInterval(() => {
+                if (seekMultiplier < 8.0) { // Limit auf 8-fache Geschwindigkeit
+                    seekMultiplier += 0.5;
+                    player.playbackRate = seekMultiplier;
+                }
+            }, 250); // Erhöht sich alle 250 Millisekunden
+        }
+
+        function startRW() {
+            if (isSeeking) return;
+            isSeeking = true;
+            wasPlaying = !player.paused;
+
+            player.pause(); // Video anhalten, um manuell rückwärts zu springen
+            seekMultiplier = 1.0;
+
+            seekInterval = setInterval(() => {
+                player.currentTime = Math.max(0, player.currentTime - (0.05 * seekMultiplier));
+                if (seekMultiplier < 20.0) { // Beschleunigungs-Limit rückwärts
+                    seekMultiplier += 1.0;
+                }
+            }, 50); // Rattert 20-mal pro Sekunde rückwärts
+        }
+
+        function stopSeek() {
+            if (!isSeeking) return;
+            isSeeking = false;
+            clearInterval(seekInterval);
+            player.playbackRate = 1.0; // Normales Tempo wiederherstellen
+
+            if (wasPlaying) player.play();
+            else player.pause();
+        }
+
+        // Empfängt das Reset-Signal vom Server
+        socket.on('reset_dashboard', () => {
+            logMessage('🧹 Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
+
+            // Sidebar leeren
+            clipList.innerHTML = '<div style="color: #77f; padding: 5px;">Keine Clips (Ordner leer)</div>';
+
+            // Aktiven Player stoppen und zurücksetzen
+            player.pause();
+            player.removeAttribute('src');
+            player.load();
+            document.getElementById('current-file').innerText = "Kein Clip geladen";
+            currentFileName = null;
+            inTime = 0;
+            outTime = 0;
+            document.getElementById('in-display').innerText = "IN: 0.00s";
+            document.getElementById('out-display').innerText = "OUT: Ende";
+        });
+
+        function triggerReset() {
+            if (confirm("Möchtest du die Runde wirklich beenden? Alle Clips werden archiviert und die Liste geleert!")) {
+                fetch('/api/reset-round');
+            }
+        }
+    </script>
+
+</body>
+
+</html>
