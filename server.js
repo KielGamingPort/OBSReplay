@@ -11,9 +11,11 @@ const { createAccessControl } = require('./lib/auth');
 const { archiveRound } = require('./lib/round-reset');
 const { createReplaySaveGuard } = require('./lib/replay-save-guard');
 const { createObsController } = require('./lib/obs-controller');
+const { readObsPassword } = require('./lib/environment');
+const { handleReplayTrigger } = require('./lib/replay-trigger');
 
 // --- KONFIGURATION ---
-const OBS_PASSWORD = process.env.OBS_PASSWORD;
+const OBS_PASSWORD = readObsPassword();
 const CONTROL_TOKEN = process.env.CONTROL_TOKEN;
 const REPLAY_ROOT = process.env.REPLAY_ROOT || 'C:/Live-Replays';
 const RAW_DIR = process.env.RAW_DIR || path.join(REPLAY_ROOT, 'Raw');
@@ -131,15 +133,10 @@ chokidar.watch(RAW_DIR, {
 // --- WEB-DASHBOARD LOGIK ---
 io.on('connection', (socket) => {
     socket.emit('obs_status', obsController.getStatus());
-    socket.on('trigger_replay', async (acknowledge) => {
-        const sendAcknowledgement = typeof acknowledge === 'function' ? acknowledge : () => {};
-        try {
-            await replaySaveGuard.saveReplay();
-            sendAcknowledgement({ ok: true });
-        } catch (error) {
-            sendAcknowledgement({ ok: false, error: error.message });
-        }
-    });
+    socket.on('trigger_replay', (acknowledge) => handleReplayTrigger(
+        () => replaySaveGuard.saveReplay(),
+        acknowledge
+    ));
 
     socket.on('cut_video', (data) => {
         if (replaySaveGuard.isResetInProgress()) {

@@ -20,7 +20,13 @@ function ConvertTo-EnvironmentValue([string]$Value) {
     if ($Value.Contains("`r") -or $Value.Contains("`n")) {
         throw 'Konfigurationswerte dürfen keine Zeilenumbrüche enthalten.'
     }
-    return '"' + $Value.Replace('"', '\"') + '"'
+    if ($Value.Contains('"')) {
+        if ($Value.Contains("'")) {
+            throw 'Konfigurationswerte dürfen nicht gleichzeitig einfache und doppelte Anführungszeichen enthalten.'
+        }
+        return "'" + $Value + "'"
+    }
+    return '"' + $Value + '"'
 }
 
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
@@ -44,10 +50,16 @@ try {
         }
         & winget install --id Gyan.FFmpeg --exact --accept-package-agreements --accept-source-agreements
         Assert-LastCommand 'ffmpeg-Installation'
+        $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $env:Path = (@($env:Path, $machinePath, $userPath) | Where-Object { $_ }) -join ';'
         $ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
     }
-    if (-not $ffmpegCommand -and $SkipFfmpegInstall) {
-        throw 'ffmpeg wurde nicht gefunden. Entferne -SkipFfmpegInstall oder setze FFMPEG_PATH manuell.'
+    if (-not $ffmpegCommand) {
+        if ($SkipFfmpegInstall) {
+            throw 'ffmpeg wurde nicht gefunden. Entferne -SkipFfmpegInstall oder setze FFMPEG_PATH manuell.'
+        }
+        throw 'ffmpeg wurde nach der Installation nicht gefunden. Öffne ein neues Terminal oder setze FFMPEG_PATH manuell.'
     }
 
     @('Raw', 'Highlights_Round', 'Highlights_Match', 'Backups') | ForEach-Object {
@@ -63,14 +75,15 @@ try {
             $generator.Dispose()
         }
         $controlToken = [Convert]::ToBase64String($tokenBytes)
-        $ffmpegValue = if ($ffmpegCommand) { $ffmpegCommand.Source } else { 'ffmpeg' }
+        $obsPasswordBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ObsPassword))
+        $ffmpegValue = $ffmpegCommand.Source
         $lines = @(
             'REPLAY_ROOT=' + (ConvertTo-EnvironmentValue $ReplayRoot),
             'HOST=' + (ConvertTo-EnvironmentValue $BindAddress),
             'PORT=3000',
             'OSC_HOST=' + (ConvertTo-EnvironmentValue $BindAddress),
             'CONTROL_TOKEN=' + (ConvertTo-EnvironmentValue $controlToken),
-            'OBS_PASSWORD=' + (ConvertTo-EnvironmentValue $ObsPassword),
+            'OBS_PASSWORD_BASE64=' + (ConvertTo-EnvironmentValue $obsPasswordBase64),
             'FFMPEG_PATH=' + (ConvertTo-EnvironmentValue $ffmpegValue)
         )
         [System.IO.File]::WriteAllLines($environmentFile, $lines, [System.Text.UTF8Encoding]::new($false))
