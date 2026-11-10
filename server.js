@@ -10,18 +10,22 @@ const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const { createAccessControl } = require('./lib/auth');
 const { archiveRound } = require('./lib/round-reset');
 const { createReplaySaveGuard } = require('./lib/replay-save-guard');
-const BACKUP_DIR = 'C:/Live-Replays/Backups';
+const { createObsController } = require('./lib/obs-controller');
+const { readObsPassword } = require('./lib/environment');
+const { handleReplayTrigger } = require('./lib/replay-trigger');
 
 // --- KONFIGURATION ---
-const OBS_PASSWORD = process.env.OBS_PASSWORD;
+const OBS_PASSWORD = readObsPassword();
 const CONTROL_TOKEN = process.env.CONTROL_TOKEN;
-const RAW_DIR = 'C:/Live-Replays/Raw';
-const HIGHLIGHTS_ROUND = 'C:/Live-Replays/Highlights_Round';
-const HIGHLIGHTS_MATCH = 'C:/Live-Replays/Highlights_Match';
+const REPLAY_ROOT = process.env.REPLAY_ROOT || 'C:/Live-Replays';
+const RAW_DIR = process.env.RAW_DIR || path.join(REPLAY_ROOT, 'Raw');
+const HIGHLIGHTS_ROUND = process.env.HIGHLIGHTS_ROUND || path.join(REPLAY_ROOT, 'Highlights_Round');
+const HIGHLIGHTS_MATCH = process.env.HIGHLIGHTS_MATCH || path.join(REPLAY_ROOT, 'Highlights_Match');
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(REPLAY_ROOT, 'Backups');
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
 const OSC_HOST = process.env.OSC_HOST || '127.0.0.1';
-const ffmpegPath = path.join(__dirname, 'ffmpeg.exe');
+const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
 
 // Ordner automatisch erstellen, falls sie nicht existieren
 [RAW_DIR, HIGHLIGHTS_ROUND, HIGHLIGHTS_MATCH].forEach(dir => {
@@ -32,9 +36,19 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const obs = new OBSWebSocket();
+const obsController = createObsController({
+    client: obs,
+    url: process.env.OBS_URL || 'ws://127.0.0.1:4455',
+    password: OBS_PASSWORD,
+    onStatus(status) {
+        io.emit('obs_status', status);
+        if (status.connected) console.log('✅ Erfolgreich mit OBS verbunden!');
+        else if (status.error) console.error('❌ OBS Verbindungsfehler:', status.error);
+    }
+});
 const access = createAccessControl(CONTROL_TOKEN);
 const activeCuts = new Set();
-const replaySaveGuard = createReplaySaveGuard(() => obs.call('SaveReplayBuffer'));
+const replaySaveGuard = createReplaySaveGuard(() => obsController.call('SaveReplayBuffer'));
 const publicDirectory = path.join(__dirname, 'public');
 const remoteCommands = new Set([
     'set-in', 'set-out', 'cut-round', 'cut-match', 'play-pause',
@@ -102,15 +116,7 @@ app.get('/api/files', (req, res) => {
 });
 
 // --- OBS VERBINDUNG ---
-async function connectOBS() {
-    try {
-        await obs.connect('ws://127.0.0.1:4455', OBS_PASSWORD);
-        console.log('✅ Erfolgreich mit OBS verbunden!');
-    } catch (error) {
-        console.error('❌ OBS Verbindungsfehler:', error.message);
-    }
-}
-connectOBS();
+obsController.start();
 
 // --- ORDNER ÜBERWACHUNG ---
 chokidar.watch(RAW_DIR, {
@@ -126,13 +132,11 @@ chokidar.watch(RAW_DIR, {
 
 // --- WEB-DASHBOARD LOGIK ---
 io.on('connection', (socket) => {
-    socket.on('trigger_replay', async () => {
-        try {
-            await replaySaveGuard.saveReplay();
-        } catch (error) {
-            socket.emit('replay_error', error.message);
-        }
-    });
+    socket.emit('obs_status', obsController.getStatus());
+    socket.on('trigger_replay', (acknowledge) => handleReplayTrigger(
+        () => replaySaveGuard.saveReplay(),
+        acknowledge
+    ));
 
     socket.on('cut_video', (data) => {
         if (replaySaveGuard.isResetInProgress()) {
