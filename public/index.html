@@ -25,7 +25,7 @@ p{margin:0;color:var(--muted)}
 h2{font-size:13px;font-weight:600;margin:0}
 .video-container{position:relative;aspect-ratio:16/9;background:radial-gradient(ellipse at center,#1b2633,#080c11);display:grid;place-items:center}
 .empty-player{text-align:center;position:absolute;pointer-events:none}
-video{position:relative;width:100%;height:100%;object-fit:contain;display:block}
+video{position:relative;width:100%;height:100%;min-width:0;min-height:0;object-fit:contain;display:block}
 video:not([src]){visibility:hidden}
 .file-bar{padding:12px 18px;border-top:1px solid var(--line);font:12px monospace;color:var(--muted);overflow-wrap:anywhere}
 .controls{margin-top:18px;padding:20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px}
