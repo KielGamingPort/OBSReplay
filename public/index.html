@@ -196,16 +196,9 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             const tournament = prompt('Challonge Turnier-ID (bei Community: community-turnier)');
             if (!tournament) return;
             try {
-                const response = await fetch('/api/challonge/matches?tournament=' + encodeURIComponent(tournament));
-                const matches = await response.json();
-                if (!response.ok) throw new Error(matches.error);
-                const number = Number(prompt('Matchnummer: ' + matches.map(m => m.number).join(', ')));
-                const match = matches.find(m => m.number === number);
-                if (!match) throw new Error('Ungültige Matchnummer');
-                match.tournament = prompt('Turniername:', tournament) || tournament;
-                match.team1 = prompt('Team 1:') || 'Team1';
-                match.team2 = prompt('Team 2:') || 'Team2';
-                const result = await fetch('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(match) });
+                const id = Number(prompt('Challonge Match-ID:'));
+                if (!Number.isSafeInteger(id) || id < 1) throw new Error('Invalid match ID');
+                const result = await fetch('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tournamentId: tournament, id }) });
                 const state = await result.json();
                 if (!result.ok) throw new Error(state.error);
                 showMatch(state);
