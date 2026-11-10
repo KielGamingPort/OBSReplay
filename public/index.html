@@ -371,9 +371,13 @@
             document.getElementById('out-display').innerText = "OUT: Ende";
         });
 
-        function triggerReset() {
+        async function triggerReset() {
             if (confirm("Möchtest du die Runde wirklich beenden? Alle Clips werden archiviert und die Liste geleert!")) {
-                fetch('/api/reset-round', { method: 'POST' });
+                const response = await fetch('/api/reset-round', { method: 'POST' });
+                if (!response.ok) {
+                    const result = await response.json().catch(() => ({}));
+                    logMessage(`❌ Reset fehlgeschlagen: ${result.error || response.statusText}`);
+                }
             }
         }
     </script>
