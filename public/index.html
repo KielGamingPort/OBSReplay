@@ -89,6 +89,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </section>
 <aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="controls card">
+<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><button class="btn" onclick="endTournament()">Turnier exportieren</button><button class="btn" onclick="nextMap()">Nächste Map</button><span id="match-state">Match: ?</span></div>
 <div class="mark">
 <button class="btn" onclick="setIn()">IN setzen</button>
 <div class="time-box" id="in-display">IN: 0.00s</div>
@@ -106,6 +107,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </div>
 <div class="export-buttons">
 <button class="btn btn-green" onclick="cutVideo('round')">In Runde speichern</button>
+<button class="btn" onclick="cutVideo('map')">In Map speichern</button>
 <button class="btn btn-gold" onclick="cutVideo('match')">In Match speichern</button>
 </div>
 </div>
@@ -173,6 +175,39 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </form>
 </dialog>
     <script>
+        async function endTournament() {
+            try {
+                const response = await fetch('/api/end-tournament', { method: 'POST' });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                logMessage('Turnier exportiert: ' + result.exportPath);
+            } catch (error) { logMessage(error.message); }
+        }
+        async function nextMap() {
+            try {
+                const response = await fetch('/api/next-map', { method: 'POST' });
+                const state = await response.json();
+                if (!response.ok) throw new Error(state.error);
+                showMatch(state);
+            } catch (error) { logMessage(error.message); }
+        }
+        function showMatch(state) { document.getElementById('match-state').textContent = `Match: ${state.match?.number ?? '?'} · Map: ${state.map}`; }
+        async function setupMatch() {
+            const tournament = prompt('Challonge Turnier-ID (bei Community: community-turnier)');
+            if (!tournament) return;
+            try {
+                const response = await fetch('/api/challonge/matches?tournament=' + encodeURIComponent(tournament));
+                const matches = await response.json();
+                if (!response.ok) throw new Error(matches.error);
+                const number = Number(prompt('Matchnummer: ' + matches.map(m => m.number).join(', ')));
+                const match = matches.find(m => m.number === number);
+                if (!match) throw new Error('Ungültige Matchnummer');
+                const result = await fetch('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(match) });
+                const state = await result.json();
+                if (!result.ok) throw new Error(state.error);
+                showMatch(state);
+            } catch (error) { logMessage(error.message); }
+        }
         async function openSettings() {
             document.getElementById('settings').showModal();
             const button = document.getElementById('settings-save');
@@ -209,6 +244,8 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
         });
 
         const socket = io({ autoConnect: false });
+        socket.on('match_state', showMatch);
+        socket.on('connect', () => fetch('/api/match').then(r => r.json()).then(showMatch).catch(error => logMessage(error.message)));
         const player = document.getElementById('player');
         const statusLog = document.getElementById('status-log');
         const clipList = document.getElementById('clip-list');
@@ -274,6 +311,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             }
             document.getElementById('login-retry').hidden = true;
             socket.connect();
+
             try { await loadClipList(); await loadClipDurations(); }
             catch (error) {
                 logMessage(error.message);
@@ -305,7 +343,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
                     const rounded = Math.round(seconds);
                     return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
                 };
-                display.textContent = `Runde: ${format(totals.round)} Â· Match: ${format(totals.match)}`;
+                display.textContent = `Runde: ${format(totals.round)} Â· Match: ${format(totals.match)} · Map: ${format(totals.map || 0)}`;
             } catch {
                 if (generation === durationRequestGeneration) display.textContent = 'CliplÃ¤ngen nicht verfÃ¼gbar';
             }
