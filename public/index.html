@@ -245,6 +245,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 
         const socket = io({ autoConnect: false });
         socket.on('match_state', showMatch);
+        socket.on('connect', () => fetch('/api/match').then(r => r.json()).then(showMatch).catch(error => logMessage(error.message)));
         const player = document.getElementById('player');
         const statusLog = document.getElementById('status-log');
         const clipList = document.getElementById('clip-list');
@@ -310,7 +311,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             }
             document.getElementById('login-retry').hidden = true;
             socket.connect();
-            fetch('/api/match').then(r => r.json()).then(showMatch).catch(error => logMessage(error.message));
+
             try { await loadClipList(); await loadClipDurations(); }
             catch (error) {
                 logMessage(error.message);
