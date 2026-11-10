@@ -174,7 +174,7 @@
     </div>
 
     <script>
-        const socket = io();
+        const socket = io({ autoConnect: false });
         const player = document.getElementById('player');
         const statusLog = document.getElementById('status-log');
         const clipList = document.getElementById('clip-list');
@@ -187,9 +187,31 @@
         let isSeeking = false;
         let wasPlaying = false;
 
-        function logMessage(msg) {
-            statusLog.innerHTML += msg + "<br>";
+        function logMessage(msg, color = null) {
+            const line = document.createElement('div');
+            line.textContent = msg;
+            if (color) line.style.color = color;
+            statusLog.appendChild(line);
             statusLog.scrollTop = statusLog.scrollHeight;
+        }
+
+        async function authenticate() {
+            const savedToken = sessionStorage.getItem('replayControlToken');
+            const token = savedToken || prompt('Zugriffstoken für die Replay-Regie:');
+            if (!token) throw new Error('Kein Zugriffstoken eingegeben.');
+
+            const response = await fetch('/api/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            if (!response.ok) {
+                sessionStorage.removeItem('replayControlToken');
+                throw new Error('Authentifizierung fehlgeschlagen.');
+            }
+            sessionStorage.setItem('replayControlToken', token);
+            socket.connect();
+            await loadClipList();
         }
 
         // Lädt alle Clips vom Server in die rechte Leiste
@@ -199,7 +221,7 @@
             clipList.innerHTML = '';
             files.reverse().forEach(file => addClipToList(file)); // Neueste oben
         }
-        loadClipList();
+        authenticate().catch((error) => logMessage(error.message));
 
         function addClipToList(fileName) {
             const div = document.createElement('div');
@@ -252,7 +274,7 @@
         // --- FERNSTEUERUNG VOM STREAM DECK EMPFANGEN ---
         socket.on('remote_command', (cmd) => {
             // Das zeigt dir im Browser an, dass der Befehl wirklich durchkam
-            logMessage(`<span style="color:#f39c12">Stream Deck Befehl: ${cmd}</span>`);
+            logMessage(`Stream Deck Befehl: ${cmd}`, '#f39c12');
 
             if (cmd === 'set-in') setIn();
             else if (cmd === 'set-out') setOut();
@@ -351,7 +373,7 @@
 
         function triggerReset() {
             if (confirm("Möchtest du die Runde wirklich beenden? Alle Clips werden archiviert und die Liste geleert!")) {
-                fetch('/api/reset-round');
+                fetch('/api/reset-round', { method: 'POST' });
             }
         }
     </script>
