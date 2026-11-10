@@ -16,7 +16,11 @@ const { handleReplayTrigger } = require('./lib/replay-trigger');
 const { listReplayFiles } = require('./lib/replay-files');
 
 // --- KONFIGURATION ---
-const OBS_PASSWORD = readObsPassword();
+const { createSettingsStore } = require('./lib/obs-settings');
+const settingsStore = createSettingsStore(path.join(__dirname, '.obs-settings.json'), {
+    url: process.env.OBS_URL || 'ws://127.0.0.1:4455',
+    password: readObsPassword() || ''
+});
 const CONTROL_TOKEN = process.env.CONTROL_TOKEN;
 const REPLAY_ROOT = process.env.REPLAY_ROOT || 'C:/Live-Replays';
 const RAW_DIR = process.env.RAW_DIR || path.join(REPLAY_ROOT, 'Raw');
@@ -39,8 +43,8 @@ const io = new Server(server);
 const obs = new OBSWebSocket();
 const obsController = createObsController({
     client: obs,
-    url: process.env.OBS_URL || 'ws://127.0.0.1:4455',
-    password: OBS_PASSWORD,
+    persistSettings: settings => settingsStore.save(settings),
+    ...settingsStore.get(),
     onStatus(status) {
         io.emit('obs_status', status);
         if (status.connected) console.log('✅ Erfolgreich mit OBS verbunden!');
