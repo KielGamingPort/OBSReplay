@@ -36,6 +36,19 @@ test('validates a cut and creates shell-free ffmpeg arguments', () => {
     });
 });
 
+test('accepts OBS recording formats for both save targets', () => {
+    withReplayDirectory((directory) => {
+        for (const extension of ['mkv', 'MOV', 'flv', 'ts', 'm4v']) {
+            const fileName = `Replay 2026-11-10.${extension}`;
+            fs.writeFileSync(path.join(directory, fileName), 'test');
+            for (const target of ['round', 'match']) {
+                const cut = validateCutRequest({ fileName, inTime: 0, outTime: 1, target }, directory);
+                assert.equal(cut.inputFile, path.join(directory, fileName));
+            }
+        }
+    });
+});
+
 test('rejects directory traversal and shell payloads', () => {
     withReplayDirectory((directory) => {
         assert.throws(() => validateCutRequest({
