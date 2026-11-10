@@ -222,7 +222,8 @@ app.post('/api/end-tournament', async (_req, res) => {
         for (const [name, directory] of Object.entries({ Raw: RAW_DIR, Round: HIGHLIGHTS_ROUND, Match: HIGHLIGHTS_MATCH, Map: HIGHLIGHTS_MAP })) {
             await fs.promises.cp(directory, path.join(exportPath, 'Current', name), { recursive: true });
         }
-        await fs.promises.writeFile(path.join(exportPath, 'manifest.json'), JSON.stringify({ ...matchStore.get(), exportedAt: new Date().toISOString(), complete: true }, null, 2));
+        await fs.promises.writeFile(path.join(exportPath, 'manifest.json.tmp'), JSON.stringify({ ...matchStore.get(), exportedAt: new Date().toISOString(), complete: true }, null, 2));
+        await fs.promises.rename(path.join(exportPath, 'manifest.json.tmp'), path.join(exportPath, 'manifest.json'));
         res.json({ exportPath });
     } catch (error) { res.status(error.statusCode || 500).json({ error: 'Export failed; source clips retained. Only exports with manifest.json are complete.' }); }
     finally { if (resetAcquired) replaySaveGuard.endReset(); transitionBusy = false; }
