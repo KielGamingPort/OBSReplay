@@ -159,6 +159,44 @@ app.get('/api/clip-durations', async (_req, res) => {
     }
 });
 
+// Match state is stored on disk before acknowledging a transition.
+const stateFile = path.join(REPLAY_ROOT, 'match-state.json');
+let matchState = fs.existsSync(stateFile) ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : { match: null, map: 1 };
+app.get('/api/match', (_req, res) => res.json(matchState));
+app.get('/api/challonge/matches', async (req, res) => {
+    const tournament = req.query.tournament;
+    if (typeof tournament !== 'string' || !/^[\w-]+$/.test(tournament)) return res.status(400).json({ error: 'Invalid tournament ID' });
+    if (!process.env.CHALLONGE_API_KEY) return res.status(503).json({ error: 'Set CHALLONGE_API_KEY on the server' });
+    try {
+        const url = new URL(`https://api.challonge.com/v1/tournaments/${tournament}/matches.json`);
+        url.searchParams.set('api_key', process.env.CHALLONGE_API_KEY);
+        const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error();
+        const matches = (await response.json()).map(({ match }) => ({ id: match.id, number: match.suggested_play_order, state: match.state }));
+        res.json(matches);
+    } catch { res.status(502).json({ error: 'Could not load Challonge matches' }); }
+});
+let transitionBusy = false;
+app.post('/api/match', async (req, res) => {
+    if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: 'Replay operation in progress' });
+    const match = req.body;
+    if (!Number.isSafeInteger(match?.id) || match.id < 1 || !Number.isSafeInteger(match.number) || match.number < 1) return res.status(400).json({ error: 'Select a numbered Challonge match' });
+    transitionBusy = true;
+    try {
+        await performRoundReset();
+        const archive = path.join(REPLAY_ROOT, 'Matches', `Match_${matchState.match?.id || 'unassigned'}_${Date.now()}`);
+        await fs.promises.cp(HIGHLIGHTS_MATCH, archive, { recursive: true });
+        const next = { match, map: 1 };
+        await fs.promises.writeFile(stateFile + '.tmp', JSON.stringify(next));
+        await fs.promises.rename(stateFile + '.tmp', stateFile);
+        matchState = next;
+        for (const entry of await fs.promises.readdir(HIGHLIGHTS_MATCH)) if (isVideoFile(entry)) await fs.promises.unlink(path.join(HIGHLIGHTS_MATCH, entry));
+        io.emit('match_state', matchState);
+        res.json(matchState);
+    } catch { res.status(500).json({ error: 'Match transition failed; archived clips retained' }); }
+    finally { transitionBusy = false; }
+});
+
 // --- OBS VERBINDUNG ---
 obsController.start();
 
@@ -184,7 +222,7 @@ io.on('connection', (socket) => {
     ));
 
     socket.on('cut_video', (data) => {
-        if (replaySaveGuard.isResetInProgress()) {
+        if (transitionBusy || replaySaveGuard.isResetInProgress()) {
             socket.emit('cut_error', 'Während des Runden-Resets kann kein Schnitt gestartet werden.');
             return;
         }
