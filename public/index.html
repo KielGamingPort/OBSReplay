@@ -89,6 +89,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </section>
 <aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="controls card">
+<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><span id="match-state">Match: ?</span></div>
 <div class="mark">
 <button class="btn" onclick="setIn()">IN setzen</button>
 <div class="time-box" id="in-display">IN: 0.00s</div>
@@ -173,6 +174,23 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </form>
 </dialog>
     <script>
+        function showMatch(state) { document.getElementById('match-state').textContent = `Match: ${state.match?.number ?? '?'} ? Map: ${state.map}`; }
+        async function setupMatch() {
+            const tournament = prompt('Challonge Turnier-ID (bei Community: community-turnier)');
+            if (!tournament) return;
+            try {
+                const response = await fetch('/api/challonge/matches?tournament=' + encodeURIComponent(tournament));
+                const matches = await response.json();
+                if (!response.ok) throw new Error(matches.error);
+                const number = Number(prompt('Matchnummer: ' + matches.map(m => m.number).join(', ')));
+                const match = matches.find(m => m.number === number);
+                if (!match) throw new Error('Ung?ltige Matchnummer');
+                const result = await fetch('/api/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(match) });
+                const state = await result.json();
+                if (!result.ok) throw new Error(state.error);
+                showMatch(state);
+            } catch (error) { logMessage(error.message); }
+        }
         async function openSettings() {
             document.getElementById('settings').showModal();
             const button = document.getElementById('settings-save');
@@ -209,6 +227,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
         });
 
         const socket = io({ autoConnect: false });
+        socket.on('match_state', showMatch);
         const player = document.getElementById('player');
         const statusLog = document.getElementById('status-log');
         const clipList = document.getElementById('clip-list');
@@ -274,6 +293,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
             }
             document.getElementById('login-retry').hidden = true;
             socket.connect();
+            fetch('/api/match').then(r => r.json()).then(showMatch).catch(error => logMessage(error.message));
             try { await loadClipList(); await loadClipDurations(); }
             catch (error) {
                 logMessage(error.message);
