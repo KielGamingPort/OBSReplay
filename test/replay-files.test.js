@@ -30,12 +30,16 @@ test('lists MP4 clips newest first and ignores other entries', async () => {
     fs.writeFileSync(older, 'old');
     fs.writeFileSync(newer, 'new');
     fs.writeFileSync(path.join(directory, 'notes.txt'), 'ignore');
+    fs.writeFileSync(path.join(directory, 'unsupported.flv'), 'ignore');
+    fs.writeFileSync(path.join(directory, 'unsupported.ts'), 'ignore');
+    fs.writeFileSync(path.join(directory, 'supported.mkv'), 'mkv');
     fs.mkdirSync(path.join(directory, 'folder.mp4'));
     fs.utimesSync(older, new Date('2026-01-01'), new Date('2026-01-01'));
     fs.utimesSync(newer, new Date('2026-02-01'), new Date('2026-02-01'));
+    fs.utimesSync(path.join(directory, 'supported.mkv'), new Date('2026-03-01'), new Date('2026-03-01'));
 
     try {
-        assert.deepEqual(await listReplayFiles(directory), ['newer.MP4', 'older.mp4']);
+        assert.deepEqual(await listReplayFiles(directory), ['supported.mkv', 'newer.MP4', 'older.mp4']);
     } finally {
         fs.rmSync(directory, { recursive: true, force: true });
     }

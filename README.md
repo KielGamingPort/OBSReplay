@@ -22,3 +22,5 @@ Companion-Aufrufe verwenden `POST` und senden das Token aus `.env` entweder als 
 ```powershell
 npm test
 ```
+
+The dashboard accepts MP4, MKV, MOV and M4V replay containers with browser-compatible codecs (such as H.264/AAC). FLV and MPEG-TS must be remuxed to MP4 in OBS before use; they are excluded because the browser player cannot load those containers.
