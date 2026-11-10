@@ -1,216 +1,242 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Replay Regie / V2</title><script src="/socket.io/socket.io.js"></script><style>
+:root{color-scheme:dark;--bg:#0c1015;--panel:#131a22;--line:#28323e;--muted:#98a6b7;--text:#edf2f7;--accent:#c5f16b}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>EVS Replay Regie</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: #171b21;
-            color: #fff;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            gap: 20px;
-        }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 'Segoe UI',sans-serif}
+button,input{font:inherit}
+button{cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+button:focus-visible,input:focus-visible,video:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+button{transition:background .15s,border-color .15s}
+button:hover{filter:brightness(1.15)}
 
-        .main-panel {
-            flex: 3;
-        }
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:19px 32px;border-bottom:1px solid var(--line);background:#10161d}
+.brand{display:flex;align-items:center;gap:14px}
+.monogram{display:grid;place-items:center;width:40px;height:40px;background:var(--accent);color:#17220d;font-size:18px;font-weight:800;border-radius:9px}
+.brand strong{font-size:17px;letter-spacing:-.4px}
+.eyebrow{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+.top-actions{display:flex;gap:14px;align-items:center}
+.status{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.status:before{content:'';width:7px;height:7px;background:#d9a05b;border-radius:50%}
+.status.connected:before{background:var(--accent)}
 
-        .side-panel {
-            flex: 1;
-            background: #222831;
-            padding: 15px;
-            border-radius: 8px;
-            height: 90vh;
-            overflow-y: auto;
-        }
+.workspace{max-width:1740px;margin:auto;padding:30px 32px}
+.page-heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+h1{font-size:28px;letter-spacing:-1px;margin:3px 0 2px;font-weight:600}
+p{margin:0;color:var(--muted)}
+.version{color:var(--accent);font:11px monospace;border:1px solid #425334;padding:4px 8px;border-radius:5px;margin-left:8px;vertical-align:middle}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px;align-items:start}
+.main-panel{min-width:0}
+.card{border:1px solid var(--line);background:var(--panel);border-radius:12px;overflow:hidden}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;border-bottom:1px solid var(--line)}
+h2{font-size:13px;font-weight:600;margin:0}
+.subtle{color:var(--muted);font-size:11px}
+.video-container{position:relative;height:clamp(240px,43vh,520px);background:radial-gradient(ellipse at center,#1b2633,#080c11);display:grid;place-items:center}
+.empty-player{text-align:center;position:absolute;pointer-events:none}
+.empty-player .frame{width:56px;height:42px;border:1px solid #4c5b6b;border-radius:8px;margin:0 auto 18px;display:grid;place-items:center;color:var(--accent);font:18px monospace}
+.empty-player strong{display:block;font-weight:500;font-size:16px;margin-bottom:6px}
+.empty-player p{font-size:12px}
+video{position:relative;width:100%;height:100%;max-height:65vh;display:block}
+video:not([src]){visibility:hidden}
+.file-bar{padding:12px 18px;border-top:1px solid var(--line);font:12px monospace;color:var(--muted);overflow-wrap:anywhere}
+.controls{margin-top:18px;padding:20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px}
+.mark{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.time-box{font:13px monospace;color:var(--accent)}
+.transport{display:flex;gap:8px;justify-content:flex-end}
+.export{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid var(--line);padding-top:18px}
+.export p{font-size:12px}
+.export-buttons{display:flex;gap:8px}
+.btn{border:1px solid #354252;border-radius:6px;padding:10px 14px;background:#202b37;color:var(--text);font-size:12px;font-weight:600;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#1c2b0b;border-color:var(--accent);padding:12px 19px}
+.btn-green{border-color:#597a39;color:#d0eea5;background:#26351e}
+.btn-gold{background:#293648;border-color:#425875}
+.btn-red{color:#f1aaa5;border-color:#62403f;background:#302022}
+.btn-small{font-size:11px;padding:7px 10px}
+.activity{margin-top:18px}
+#status-log{height:112px;overflow-y:auto;padding:12px 18px;color:#a9b7c7;font:11px/1.9 Consolas,monospace}
+.side-panel{min-width:0}
+.library-header{padding:18px}
+.library-header p{font-size:12px;margin-top:4px}
+#clip-list{padding:10px;max-height:650px;overflow:auto}
+.clip-item{width:100%;text-align:left;display:block;background:#19222d;border:1px solid transparent;border-radius:7px;padding:14px;margin-bottom:7px;color:#c9d2dd;font-size:12px;overflow-wrap:anywhere}
+.clip-item:before{content:'CLIP';display:block;font:9px monospace;letter-spacing:2px;color:var(--muted);margin-bottom:7px}
+.clip-item:hover{background:#243141}
+.clip-item.active{border-color:#84a84e;background:#25331f;color:#d7efb8}
+.empty-library{padding:35px 16px;text-align:center;color:var(--muted);font-size:12px}
+.library-footer{border-top:1px solid var(--line);padding:16px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.help{margin-top:16px;padding:18px;border:1px dashed #303d4b;border-radius:9px;color:var(--muted);font-size:12px}
+.help strong{display:block;color:#c4cfdb;margin-bottom:5px;font-size:12px}
+footer{margin-top:28px;display:flex;justify-content:space-between;color:#728194;font:10px monospace;letter-spacing:1px}
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-            border-bottom: 2px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
+dialog{width:460px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);overflow:auto;padding:28px;background:var(--panel);color:var(--text);border:1px solid #3e4d5e;border-radius:12px;box-shadow:0 24px 100px #0009}
+dialog::backdrop{background:#03070bc9;backdrop-filter:blur(4px)}
+dialog h2{font-size:20px;margin-bottom:18px}
+dialog p{font-size:12px;margin:16px 0}
+dialog label{color:var(--text)}
+input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c1219;color:var(--text);border:1px solid #3d4b5b;border-radius:5px}
+#settings-status{color:var(--accent)}
+.dialog-actions{display:flex;gap:8px;margin-top:24px}
 
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
+@media(min-width:1500px){.layout{grid-template-columns:minmax(0,1fr) 380px}
+}
+@media(max-width:1000px){.layout{grid-template-columns:minmax(0,1fr) 280px}
+.workspace{padding:24px 20px}
+.controls{grid-template-columns:1fr}
+.transport{justify-content:flex-start}
+.export{flex-wrap:wrap}
+}
+@media(max-width:760px){.topbar{padding:16px;flex-wrap:wrap}
+.workspace{padding:22px 16px}
+.layout{grid-template-columns:1fr}
+.page-heading{align-items:flex-start;flex-wrap:wrap}
+h1{font-size:25px}
+.top-actions{flex-wrap:wrap}
+.export-buttons{flex-wrap:wrap}
+.mark{flex-wrap:wrap}
+footer{gap:20px;flex-wrap:wrap}
+.video-container{min-height:200px}
+#clip-list{max-height:350px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}
+}
 
-        .btn-red {
-            background-color: #c95858;
-            color: white;
-        }
-
-        .btn-blue {
-            background-color: #527fa9;
-            color: white;
-        }
-
-        .btn-green {
-            background-color: #54896d;
-            color: white;
-            margin-right: 5px;
-        }
-
-        .btn-gold {
-            background-color: #c4a568;
-            color: black;
-        }
-
-        .video-container {
-            background: #000;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        video {
-            max-width: 100%;
-            max-height: 500px;
-            border-radius: 4px;
-            outline: none;
-        }
-
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            background: #2c3e50;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-
-        .time-box {
-            background: #191f27;
-            padding: 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            text-align: center;
-            margin-top: 5px;
-        }
-
-        #status-log {
-            background: #111;
-            padding: 10px;
-            border-radius: 8px;
-            font-family: monospace;
-            color: #a7b6a9;
-            height: 100px;
-            overflow-y: auto;
-        }
-
-        .clip-item {
-            background: #2b333e;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            word-break: break-all;
-        }
-
-        .clip-item:hover,
-        .clip-item.active {
-            background: #527fa9;
-        }
-        * { box-sizing: border-box; }
-        body { line-height: 1.5; padding: 24px; gap: 24px; }
-        .main-panel { min-width: 0; }
-        .side-panel { min-width: 250px; height: calc(100vh - 48px); border: 1px solid #323b47; padding: 18px; }
-        .header { align-items: center; gap: 16px; border-bottom: 1px solid #323b47; padding-bottom: 18px; }
-        h1 { font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -.4px; }
-        h3 { font-size: 15px; font-weight: 600; }
-        .btn { font: inherit; font-size: 13px; font-weight: 600; border-radius: 7px; transition: filter 150ms ease, background-color 150ms ease; }
-        .btn:hover { filter: brightness(1.12); }
-        .btn:active { filter: brightness(.92); }
-        .btn:focus-visible, .clip-item:focus-visible { outline: 2px solid #93b9df; outline-offset: 3px; }
-        .video-container { padding: 16px; border: 1px solid #303843; }
-        .controls { gap: 16px; flex-wrap: wrap; align-items: center; border: 1px solid #323b47; }
-        .time-box { color: #b9c4d2; font-size: 13px; }
-        #status-log { background: #13171c; border: 1px solid #303843; font-size: 12px; line-height: 1.7; }
-        .clip-item { padding: 12px; margin-bottom: 8px; border-radius: 6px; overflow-wrap: anywhere; word-break: normal; transition: background-color 150ms ease; }
-        .clip-item:hover { background: #354353; }
-        .clip-item.active { background: #365573; }
-        @media (max-width: 900px) {
-            body { flex-direction: column; padding: 16px; gap: 16px; }
-            .side-panel { height: auto; max-height: 400px; min-width: 0; }
-            .header { flex-wrap: wrap; }
-        }
-        @media (prefers-reduced-motion: reduce) { .btn, .clip-item { transition: none; } }
-    </style>
-</head>
-
-<body>
-
-    <div class="main-panel">
-        <div class="header">
-            <h1>Replay Regie</h1><button class="btn btn-blue" onclick="openSettings()">Einstellungen</button>
-            <button class="btn btn-red" onclick="triggerReplay()">NEUEN CLIP SPEICHERN</button>
-        </div>
-
-        <div class="video-container">
-            <h3 id="current-file" style="margin-top: 0; color: #aaa;">Kein Clip geladen</h3>
-            <video id="player" controls></video>
-        </div>
-
-        <div class="controls">
-            <div>
-                <button class="btn btn-blue" onclick="setIn()">[ IN-POINT</button>
-                <div class="time-box" id="in-display">IN: 0.00s</div>
-            </div>
-            <div style="text-align: center;">
-                <button class="btn btn-green" onclick="cutVideo('round')">IN RUNDE</button>
-                <button class="btn btn-gold" onclick="cutVideo('match')">IN MATCH</button>
-            </div>
-            <div>
-                <button class="btn btn-blue" onclick="setOut()">OUT-POINT ]</button>
-                <div class="time-box" id="out-display">OUT: Ende</div>
-            </div>
-            <div style="text-align: center; margin-bottom: 10px;">
-                <button class="btn btn-gold" onmousedown="startRW()" onmouseup="stopSeek()"
-                    onmouseleave="stopSeek()">&laquo; REWIND</button>
-                <button class="btn btn-gold" onmousedown="startFF()" onmouseup="stopSeek()"
-                    onmouseleave="stopSeek()">FAST FWD &raquo;</button>
-            </div>
-        </div>
-
-        <div id="status-log">System bereit...<br></div>
-    </div>
-
-    <div class="side-panel">
-        <h3>Gesammelte Clips</h3>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0;">Gesammelte Clips</h3>
-            <button class="btn btn-red" style="padding: 5px 10px; font-size: 11px;" onclick="triggerReset()">RUNDE
-                RESET</button>
-        </div>
-        <div id="clip-list">Lade Clips...</div>
-    </div>
-
-    <dialog id="settings" aria-labelledby="settings-title" style="background:#222831;color:white;border-radius:8px;max-width:90vw">
-      <form id="settings-form">
-        <h2 id="settings-title">OBS-Verbindung</h2>
-        <p><label>WebSocket-Adresse<br><input id="obs-url" type="url" required style="width:100%"></label></p>
-        <p><label>Passwort<br><input id="obs-password" type="password" autocomplete="new-password"></label></p>
-        <p>Leer lassen, um das Passwort beizubehalten.</p>
-        <p><label><input id="obs-clear" type="checkbox"> Passwort entfernen</label></p>
-        <p>Wird gespeichert und bleibt nach einem Serverneustart erhalten.</p>
-        <p id="settings-status" role="status"></p>
-        <button id="settings-save" class="btn btn-green">Übernehmen &amp; verbinden</button>
-        <button type="button" class="btn btn-blue" onclick="document.getElementById('settings').close()">Schließen</button>
-      </form>
-    </dialog>
+</style></head><body>
+<header class="topbar">
+<div class="brand">
+<span class="monogram" aria-hidden="true">R</span>
+<div>
+<strong>Replay Regie</strong>
+<div class="eyebrow">Production workspace</div>
+</div>
+</div>
+<div class="top-actions">
+<span id="connection-status" class="status" role="status">Regie verbindet...</span>
+<button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button>
+<button class="btn" onclick="openSettings()">Verbindungseinstellungen</button>
+</div>
+</header>
+<main class="workspace">
+<div class="page-heading">
+<div>
+<div class="eyebrow">Replay Control</div>
+<h1>Jeder Moment zählt.<span class="version">V2</span>
+</h1>
+<p>Sichten. Markieren. Für die Highlights sichern.</p>
+</div>
+<button class="btn btn-primary" onclick="triggerReplay()">Neuen Clip speichern</button>
+</div>
+<div class="layout">
+<section class="main-panel" aria-label="Clip bearbeiten">
+<div class="card">
+<div class="section-head">
+<h2>Clip-Vorschau</h2>
+<span class="subtle">SOURCE / RAW</span>
+</div>
+<div class="video-container">
+<div id="empty-player" class="empty-player">
+<div class="frame" aria-hidden="true">[ &gt; ]</div>
+<strong>Bereit für den nächsten Moment</strong>
+<p>Clip aus der Mediathek wählen oder Replay speichern.</p>
+</div>
+<video id="player" controls aria-label="Replay-Vorschau">
+</video>
+</div>
+<div class="file-bar" id="current-file">Kein Clip geladen</div>
+</div>
+<div class="controls card">
+<div class="mark">
+<button class="btn" onclick="setIn()">IN setzen</button>
+<div class="time-box" id="in-display">IN: 0.00s</div>
+<button class="btn" onclick="setOut()">OUT setzen</button>
+<div class="time-box" id="out-display">OUT: Ende</div>
+</div>
+<div class="transport">
+<button class="btn" onpointerdown="this.setPointerCapture(event.pointerId); startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">Zurückspulen</button>
+<button class="btn" onpointerdown="this.setPointerCapture(event.pointerId); startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key === ' ' || event.key === 'Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">Vorspulen</button>
+</div>
+<div class="export">
+<div>
+<h2>Auswahl sichern</h2>
+<p>Markierten Bereich als Highlight exportieren.</p>
+</div>
+<div class="export-buttons">
+<button class="btn btn-green" onclick="cutVideo('round')">In Runde speichern</button>
+<button class="btn btn-gold" onclick="cutVideo('match')">In Match speichern</button>
+</div>
+</div>
+</div>
+<section class="activity card">
+<div class="section-head">
+<h2>Aktivität</h2>
+<span class="subtle">SYSTEM LOG</span>
+</div>
+<div id="status-log" role="log" aria-label="Systemmeldungen">System bereit.<br>
+</div>
+</section>
+</section>
+<aside class="side-panel" aria-label="Clip-Mediathek">
+<div class="card">
+<div class="library-header">
+<div class="eyebrow">Replay Library</div>
+<h2 style="font-size:18px;margin-top:5px">Gesammelte Clips</h2>
+<p>Neueste Aufnahmen zuerst.</p>
+</div>
+<div id="clip-list">
+<div class="empty-library">Anmeldung wird vorbereitet...</div>
+</div>
+<div class="library-footer">
+<span class="subtle">Runde abschließen</span>
+<button class="btn btn-red btn-small" onclick="triggerReset()">Runde zurücksetzen</button>
+</div>
+</div>
+<div class="help">
+<strong>Dein Workflow. Direkt verbunden.</strong>OBS Replay Buffer und Companion bleiben deine Steuerzentrale. Neue Aufnahmen erscheinen hier automatisch.</div>
+</aside>
+</div>
+<footer>
+<span>REPLAY REGIE / V2</span>
+<span>OBS + COMPANION</span>
+</footer>
+</main>
+<dialog id="login" aria-labelledby="login-title">
+<form id="login-form">
+<div class="eyebrow">Replay Regie</div>
+<h2 id="login-title">Regie freischalten</h2>
+<p>Mit deinem bestehenden Zugriffstoken anmelden.</p>
+<p>
+<label>Zugriffstoken<input id="control-token" type="password" required autocomplete="off">
+</label>
+</p>
+<button class="btn btn-primary">Anmelden</button>
+</form>
+</dialog>
+<dialog id="settings" aria-labelledby="settings-title">
+<form id="settings-form">
+<div class="eyebrow">Verbindungseinstellungen</div>
+<h2 id="settings-title">OBS-Verbindung</h2>
+<p>
+<label>WebSocket-Adresse<input id="obs-url" type="url" required>
+</label>
+</p>
+<p>
+<label>Passwort<input id="obs-password" type="password" autocomplete="new-password">
+</label>
+</p>
+<p>Leer lassen, um das Passwort beizubehalten.</p>
+<p>
+<label>
+<input id="obs-clear" type="checkbox"> Passwort entfernen</label>
+</p>
+<p>Wird gespeichert und bleibt nach einem Serverneustart erhalten.</p>
+<p id="settings-status" role="status">
+</p>
+<div class="dialog-actions">
+<button id="settings-save" class="btn btn-green">Übernehmen &amp; verbinden</button>
+<button type="button" class="btn" onclick="document.getElementById('settings').close()">Schließen</button>
+</div>
+</form>
+</dialog>
     <script>
         async function openSettings() {
             document.getElementById('settings').showModal();
@@ -268,9 +294,31 @@
             statusLog.scrollTop = statusLog.scrollHeight;
         }
 
+        function requestAccessToken() {
+            const dialog = document.getElementById('login');
+            dialog.showModal();
+            return new Promise((resolve, reject) => {
+                const form = document.getElementById('login-form');
+                const cleanup = () => { form.onsubmit = null; dialog.oncancel = null; };
+                form.onsubmit = event => {
+                    event.preventDefault();
+                    const input = document.getElementById('control-token');
+                    const token = input.value;
+                    input.value = '';
+                    cleanup(); dialog.close(); resolve(token);
+                };
+                dialog.oncancel = () => { cleanup(); reject(new Error('Anmeldung abgebrochen.')); };
+            });
+        }
+        function showAuthError(error) {
+            logMessage(error.message);
+            document.getElementById('connection-status').textContent = 'Anmeldung erforderlich';
+            document.getElementById('login-retry').hidden = false;
+            clipList.innerHTML = '<div class="empty-library">Bitte anmelden, um Clips zu laden.</div>';
+        }
         async function authenticate() {
             const savedToken = sessionStorage.getItem('replayControlToken');
-            const token = savedToken || prompt('Zugriffstoken für die Replay-Regie:');
+            const token = savedToken || await requestAccessToken();
             if (!token) throw new Error('Kein Zugriffstoken eingegeben.');
 
             const response = await fetch('/api/session', {
@@ -283,6 +331,7 @@
                 throw new Error('Authentifizierung fehlgeschlagen.');
             }
             sessionStorage.setItem('replayControlToken', token);
+            document.getElementById('login-retry').hidden = true;
             socket.connect();
             await loadClipList();
         }
@@ -290,15 +339,19 @@
         // Lädt alle Clips vom Server in die rechte Leiste
         async function loadClipList() {
             const res = await fetch('/api/files');
+            if (!res.ok) throw new Error('Clips konnten nicht geladen werden.');
             const files = await res.json();
             clipList.innerHTML = '';
-            files.forEach(file => addClipToList(file, false)); // Neueste oben
+            files.forEach(file => addClipToList(file, false));
+            if (!files.length) clipList.innerHTML = '<div class="empty-library">Noch keine Clips. Speichere einen Replay.</div>';
         }
-        authenticate().catch((error) => logMessage(error.message));
+        authenticate().catch(showAuthError);
 
         function addClipToList(fileName, prepend = true) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;
-            const div = document.createElement('div');
+            clipList.querySelector?.('.empty-library')?.remove();
+            const div = document.createElement('button');
+            div.type = 'button';
             div.dataset.fileName = fileName;
             div.className = 'clip-item';
             div.innerText = fileName;
@@ -319,6 +372,7 @@
             player.pause();
             player.removeAttribute('src');
             player.load();
+            document.getElementById('empty-player').hidden = true;
             player.src = "/raw_videos/" + encodeURIComponent(fileName);
             player.load();
 
@@ -333,7 +387,12 @@
                 if (!result?.ok) logMessage(`OBS: ${result?.error || 'Unbekannter Fehler'}`);
             });
         }
+        socket.on('disconnect', () => { document.getElementById('connection-status').textContent = 'Regie getrennt'; document.getElementById('connection-status').classList.remove('connected'); });
+        socket.on('connect_error', () => { document.getElementById('connection-status').textContent = 'Regie nicht erreichbar'; });
         socket.on('obs_status', (status) => {
+            const badge = document.getElementById('connection-status');
+            badge.textContent = status.connected ? 'OBS verbunden' : 'OBS getrennt';
+            badge.classList.toggle('connected', status.connected);
             logMessage(status.connected ? 'OBS verbunden' : `OBS getrennt${status.error ? `: ${status.error}` : ''}`);
         });
         socket.on('new_replay_available', (fileName) => {
@@ -441,8 +500,9 @@
         socket.on('reset_dashboard', () => {
             logMessage('Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
 
+            document.getElementById('empty-player').hidden = false;
             // Sidebar leeren
-            clipList.innerHTML = '<div style="color: #77f; padding: 5px;">Keine Clips (Ordner leer)</div>';
+            clipList.innerHTML = '<div class="empty-library">Noch keine Clips. Speichere einen Replay.</div>';
 
             // Aktiven Player stoppen und zurücksetzen
             player.pause();
