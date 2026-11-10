@@ -27,6 +27,7 @@ const REPLAY_ROOT = process.env.REPLAY_ROOT || 'C:/Live-Replays';
 const RAW_DIR = process.env.RAW_DIR || path.join(REPLAY_ROOT, 'Raw');
 const HIGHLIGHTS_ROUND = process.env.HIGHLIGHTS_ROUND || path.join(REPLAY_ROOT, 'Highlights_Round');
 const HIGHLIGHTS_MATCH = process.env.HIGHLIGHTS_MATCH || path.join(REPLAY_ROOT, 'Highlights_Match');
+const HIGHLIGHTS_MAP = path.join(REPLAY_ROOT, 'Highlights_Map');
 const BACKUP_DIR = process.env.BACKUP_DIR || path.join(REPLAY_ROOT, 'Backups');
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = Number(process.env.PORT || 3000);
@@ -34,7 +35,7 @@ const OSC_HOST = process.env.OSC_HOST || '127.0.0.1';
 const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
 
 // Ordner automatisch erstellen, falls sie nicht existieren
-[RAW_DIR, HIGHLIGHTS_ROUND, HIGHLIGHTS_MATCH].forEach(dir => {
+[RAW_DIR, HIGHLIGHTS_ROUND, HIGHLIGHTS_MATCH, HIGHLIGHTS_MAP].forEach(dir => {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -135,7 +136,7 @@ app.get('/api/files', async (_req, res) => {
 app.get('/api/clip-durations', async (_req, res) => {
     try {
         const totals = {};
-        for (const [target, directory] of Object.entries({ round: HIGHLIGHTS_ROUND, match: HIGHLIGHTS_MATCH })) {
+        for (const [target, directory] of Object.entries({ round: HIGHLIGHTS_ROUND, match: HIGHLIGHTS_MATCH, map: HIGHLIGHTS_MAP })) {
             let seconds = 0;
             const entries = await fs.promises.readdir(directory, { withFileTypes: true });
             for (const entry of entries) {
@@ -161,7 +162,7 @@ app.get('/api/clip-durations', async (_req, res) => {
 
 // Match state is stored on disk before acknowledging a transition.
 const { createMatchStore } = require('./lib/match-state');
-const matchStore = createMatchStore(REPLAY_ROOT, HIGHLIGHTS_MATCH);
+const matchStore = createMatchStore(REPLAY_ROOT, HIGHLIGHTS_MATCH, fs, HIGHLIGHTS_MAP);
 app.get('/api/match', (_req, res) => res.json(matchStore.get()));
 app.get('/api/challonge/matches', async (req, res) => {
     const tournament = req.query.tournament;
@@ -188,7 +189,21 @@ app.post('/api/match', async (req, res) => {
         io.emit('match_state', matchStore.get());
         io.emit('clip_durations_changed');
         res.json(matchStore.get());
+
     } catch { res.status(500).json({ error: 'Match transition failed; archived clips retained' }); }
+    finally { transitionBusy = false; }
+});
+
+app.post('/api/next-map', async (_req, res) => {
+    if (transitionBusy || activeCuts.size || replaySaveGuard.isResetInProgress()) return res.status(409).json({ error: 'Replay operation in progress' });
+    transitionBusy = true;
+    try {
+        if (!matchStore.hasPending()) await performRoundReset();
+        await matchStore.nextMap();
+        io.emit('match_state', matchStore.get());
+        io.emit('clip_durations_changed');
+        res.json(matchStore.get());
+    } catch { res.status(500).json({ error: 'Map transition failed; archive retained' }); }
     finally { transitionBusy = false; }
 });
 
@@ -230,7 +245,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        const targetDir = cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
+        const targetDir = cut.directoryKey === 'map' ? HIGHLIGHTS_MAP : cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
         const outputFile = path.join(targetDir, `${cut.prefix}${Date.now()}.mp4`);
 
         console.log(` Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);

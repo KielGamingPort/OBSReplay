@@ -6,7 +6,7 @@ const test = require('node:test');
 
 test('match route announces state and duration changes only after cleanup completes', async () => {
     const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
-    const route = source.slice(source.indexOf('let transitionBusy = false;'), source.indexOf('// --- OBS VERBINDUNG ---'));
+    const route = source.slice(source.indexOf('let transitionBusy = false;'), source.indexOf("app.post('/api/next-map'"));
     const events = [];
     let handler;
     let fail = true;

@@ -67,3 +67,44 @@ test('restart completes a transaction interrupted after publishing state', async
     assert.deepEqual(fs.readdirSync(highlights), []);
     assert.equal(recovered.hasPending(), false);
 });
+
+for (const restart of [false, true]) {
+    test(`map cleanup failure recovers exactly once on ${restart ? 'restart' : 'retry'} and retains match clips`, async t => {
+        const { root, highlights } = fixture(t);
+        const map = path.join(root, 'map');
+        fs.mkdirSync(map);
+        fs.writeFileSync(path.join(map, 'map.mp4'), 'map video');
+        let fail = true;
+        const store = createMatchStore(root, highlights, { ...fs, unlinkSync(file) {
+            if (fail && file.endsWith('map.mp4')) throw Object.assign(new Error('locked'), { code: 'EPERM' });
+            fs.unlinkSync(file);
+        } }, map);
+        await assert.rejects(store.nextMap(), /locked/);
+        assert.equal(store.get().map, 2);
+        assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'match-state.json'))).map, 2);
+        fail = false;
+        const recovered = restart ? createMatchStore(root, highlights, fs, map) : store;
+        if (!restart) await recovered.nextMap();
+        assert.equal(recovered.get().map, 3);
+        assert.deepEqual(fs.readdirSync(map), []);
+        assert.equal(fs.readFileSync(path.join(highlights, 'old.mp4'), 'utf8'), 'video');
+        const archive = path.join(root, 'Matches', 'Match_1');
+        assert.equal(fs.readdirSync(archive).length, 1);
+        assert.equal(fs.readFileSync(path.join(archive, fs.readdirSync(archive)[0], 'map.mp4'), 'utf8'), 'map video');
+    });
+}
+
+test('match transition archives and clears both current map and match clips', async t => {
+    const { root, highlights } = fixture(t);
+    const map = path.join(root, 'map');
+    fs.mkdirSync(map);
+    fs.writeFileSync(path.join(map, 'map.mp4'), 'map video');
+    const store = createMatchStore(root, highlights, fs, map);
+    await store.transition({ id: 2, number: 2 });
+    const archive = path.join(root, 'Matches', fs.readdirSync(path.join(root, 'Matches'))[0]);
+    assert.equal(fs.readFileSync(path.join(archive, 'Match', 'old.mp4'), 'utf8'), 'video');
+    assert.equal(fs.readFileSync(path.join(archive, 'Map_2', 'map.mp4'), 'utf8'), 'map video');
+    assert.deepEqual(fs.readdirSync(map), []);
+    assert.deepEqual(fs.readdirSync(highlights), []);
+    assert.equal(store.get().map, 1);
+});
