@@ -5,6 +5,44 @@ const test = require('node:test');
 
 const html = fs.readFileSync(require('node:path').join(__dirname, '../public/index.html'), 'utf8');
 
+for (const scenario of [
+    { name: 'local or existing session', status: 204, prompts: 0, connections: 1 },
+    { name: 'remote client without a session', status: 401, prompts: 1, connections: 1 },
+    { name: 'unavailable authentication endpoint', status: 500, prompts: 0, connections: 0 }
+]) {
+    test(`dashboard authentication handles ${scenario.name}`, async () => {
+        let prompts = 0;
+        let connections = 0;
+        let loads = 0;
+        const requests = [];
+        const context = vm.createContext({
+            fetch: async (url, options) => {
+                requests.push({ url, options });
+                return options ? { ok: true, status: 204 } : {
+                    ok: scenario.status === 204, status: scenario.status
+                };
+            },
+            sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+            requestAccessToken: async () => { prompts++; return 'test-token'; },
+            document: { getElementById: () => ({ hidden: true }) },
+            socket: { connect: () => { connections++; } },
+            loadClipList: async () => { loads++; }
+        });
+        vm.runInContext(html.match(/        async function authenticate\(\)[\s\S]*?(?=        \/\/)/)[0], context);
+        const result = vm.runInContext('authenticate()', context);
+        if (scenario.status === 500) await assert.rejects(result, /Authentifizierung fehlgeschlagen/);
+        else await result;
+        assert.equal(prompts, scenario.prompts);
+        assert.equal(connections, scenario.connections);
+        assert.equal(loads, scenario.connections);
+        assert.equal(requests.length, scenario.prompts + 1);
+        if (scenario.prompts) {
+            assert.equal(requests[1].options.method, 'POST');
+            assert.deepEqual(JSON.parse(requests[1].options.body), { token: 'test-token' });
+        }
+    });
+}
+
 test('rollback add events do not duplicate clips or change the selected video', () => {
     const children = [];
     const handlers = {};

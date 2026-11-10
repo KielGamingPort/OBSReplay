@@ -15,6 +15,8 @@ Das Setup installiert die Node-Abhängigkeiten, installiert ffmpeg über `Gyan.F
 
 Das Dashboard ist standardmäßig nur unter `http://127.0.0.1:3000` erreichbar. Für einen absichtlich freigegebenen LAN-Betrieb müssen `HOST` und gegebenenfalls `OSC_HOST` in `.env` gesetzt sowie Firewall und Zugriffstoken passend konfiguriert werden.
 
+Auf dem lokalen Rechner öffnet sich das Panel unter `http://localhost:3000` oder `http://127.0.0.1:3000` ohne Zugriffstoken. Dies gilt auch für API, Videos und Socket.IO über Loopback (IPv4/IPv6). Zugriffe über eine LAN-Adresse benötigen weiterhin den Token. Lokale Reverse-Proxys dürfen keine entfernten Clients als Loopback-Anfragen mit lokalem Host und ohne fremden Origin weiterleiten. `CONTROL_TOKEN` bleibt für entfernte Clients erforderlich.
+
 Companion-Aufrufe verwenden `POST` und senden das Token aus `.env` entweder als `Authorization: Bearer <token>` oder `X-Replay-Token: <token>`.
 
 ## Entwicklung

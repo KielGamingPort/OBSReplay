@@ -247,20 +247,26 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
             clipList.innerHTML = '<div class="empty-library">Bitte anmelden, um Clips zu laden.</div>';
         }
         async function authenticate() {
-            const savedToken = sessionStorage.getItem('replayControlToken');
-            const token = savedToken || await requestAccessToken();
-            if (!token) throw new Error('Kein Zugriffstoken eingegeben.');
-
-            const response = await fetch('/api/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token })
-            });
-            if (!response.ok) {
-                sessionStorage.removeItem('replayControlToken');
+            const session = await fetch('/api/session');
+            if (!session.ok && session.status !== 401) {
                 throw new Error('Authentifizierung fehlgeschlagen.');
             }
-            sessionStorage.setItem('replayControlToken', token);
+            if (!session.ok) {
+                const savedToken = sessionStorage.getItem('replayControlToken');
+                const token = savedToken || await requestAccessToken();
+                if (!token) throw new Error('Kein Zugriffstoken eingegeben.');
+
+                const response = await fetch('/api/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                if (!response.ok) {
+                    sessionStorage.removeItem('replayControlToken');
+                    throw new Error('Authentifizierung fehlgeschlagen.');
+                }
+                sessionStorage.setItem('replayControlToken', token);
+            }
             document.getElementById('login-retry').hidden = true;
             socket.connect();
             try { await loadClipList(); }

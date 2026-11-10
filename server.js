@@ -81,6 +81,7 @@ function requireHttpAuth(req, res, next) {
 }
 
 app.use('/api', requireHttpAuth);
+app.get('/api/session', (_req, res) => res.sendStatus(204));
 app.get('/api/obs-settings', (_req, res) => res.json(obsController.getSettings()));
 app.put('/api/obs-settings', async (req, res) => {
     const { url, password } = req.body || {};
