@@ -7,14 +7,18 @@ const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
+const { createAccessControl } = require('./lib/auth');
 const BACKUP_DIR = 'C:/Live-Replays/Backups';
 
 // --- KONFIGURATION ---
-const OBS_PASSWORD = 'GmRgmHIMIANBHFGA'; // <-- HIER PASSWORT EINTRAGEN
+const OBS_PASSWORD = process.env.OBS_PASSWORD;
+const CONTROL_TOKEN = process.env.CONTROL_TOKEN;
 const RAW_DIR = 'C:/Live-Replays/Raw';
 const HIGHLIGHTS_ROUND = 'C:/Live-Replays/Highlights_Round';
 const HIGHLIGHTS_MATCH = 'C:/Live-Replays/Highlights_Match';
-const PORT = 3000;
+const HOST = process.env.HOST || '127.0.0.1';
+const PORT = Number(process.env.PORT || 3000);
+const OSC_HOST = process.env.OSC_HOST || '127.0.0.1';
 const ffmpegPath = path.join(__dirname, 'ffmpeg.exe');
 
 // Ordner automatisch erstellen, falls sie nicht existieren
@@ -26,13 +30,46 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const obs = new OBSWebSocket();
+const access = createAccessControl(CONTROL_TOKEN);
+const publicDirectory = path.join(__dirname, 'public');
+const remoteCommands = new Set([
+    'set-in', 'set-out', 'cut-round', 'cut-match', 'play-pause',
+    'next-clip', 'prev-clip', 'ff-start', 'rw-start', 'seek-stop'
+]);
 
-app.use(express.static(__dirname));
-app.use('/raw_videos', express.static(RAW_DIR));
+app.use(express.json({ limit: '4kb' }));
+app.get('/', (_req, res) => res.sendFile(path.join(publicDirectory, 'index.html')));
+
+app.post('/api/session', (req, res) => {
+    if (!access.establishSession(req, res)) {
+        res.status(401).json({ error: 'Ungültiger Zugriffstoken.' });
+        return;
+    }
+    res.sendStatus(204);
+});
+
+function requireHttpAuth(req, res, next) {
+    if (access.requestIsAuthorized(req)) {
+        next();
+        return;
+    }
+    res.status(401).json({ error: 'Authentifizierung erforderlich.' });
+}
+
+app.use('/api', requireHttpAuth);
+app.use('/raw_videos', requireHttpAuth, express.static(RAW_DIR));
+
+io.use((socket, next) => {
+    if (access.socketIsAuthorized(socket)) {
+        next();
+        return;
+    }
+    next(new Error('Authentifizierung erforderlich.'));
+});
 
 // --- NEU: STREAM DECK / COMPANION API ---
 // Wenn Companion diese URL aufruft, speichert OBS den Puffer
-app.get('/api/save-buffer', async (req, res) => {
+app.post('/api/save-buffer', async (req, res) => {
     console.log('🕹️ Stream Deck Befehl: Replay speichern');
     try {
         await obs.call('SaveReplayBuffer');
@@ -42,8 +79,12 @@ app.get('/api/save-buffer', async (req, res) => {
     }
 });
 // Universal-Route für alle anderen Stream Deck Buttons
-app.get('/api/remote/:command', (req, res) => {
+app.post('/api/remote/:command', (req, res) => {
     const cmd = req.params.command;
+    if (!remoteCommands.has(cmd)) {
+        res.status(400).json({ error: 'Unbekannter Fernsteuerungsbefehl.' });
+        return;
+    }
     console.log(`🕹️ Stream Deck Fernsteuerung: ${cmd}`);
     // Leitet den Befehl live an den Webbrowser weiter
     io.emit('remote_command', cmd);
@@ -109,14 +150,14 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, () => {
-    console.log(`🚀 System läuft auf http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+    console.log(`🚀 System läuft auf http://${HOST}:${PORT}`);
 });
 // --- OSC FERNSTEUERUNG FÜR COMPANION ---
 const osc = require('osc');
 
 const udpPort = new osc.UDPPort({
-    localAddress: "0.0.0.0",
+    localAddress: OSC_HOST,
     localPort: 3333 // Auf diesem Port lauschen wir für das Stream Deck
 });
 
@@ -189,7 +230,7 @@ function performRoundReset() {
 }
 
 // HTTP-Route für das Web-Dashboard
-app.get('/api/reset-round', (req, res) => {
+app.post('/api/reset-round', (req, res) => {
     performRoundReset();
     res.send('OK');
 });
