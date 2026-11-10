@@ -1,4 +1,10 @@
 {
+  "name": "obs-replay",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  },
   "dependencies": {
     "chokidar": "^6.0.0",
     "express": "^5.3.0",

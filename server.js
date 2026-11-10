@@ -3,9 +3,10 @@ const http = require('http');
 const { Server } = require('socket.io');
 const OBSWebSocket = require('obs-websocket-js').default;
 const chokidar = require('chokidar');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const BACKUP_DIR = 'C:/Live-Replays/Backups';
 
 // --- KONFIGURATION ---
@@ -85,25 +86,25 @@ io.on('connection', (socket) => {
     });
 
     socket.on('cut_video', (data) => {
-        const { fileName, inTime, outTime, target } = data;
+        let cut;
+        try {
+            cut = validateCutRequest(data, RAW_DIR);
+        } catch (error) {
+            socket.emit('cut_error', error.message);
+            return;
+        }
 
-        // Zielordner bestimmen
-        const targetDir = target === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
-        const prefix = target === 'match' ? 'MATCH_' : 'ROUND_';
+        const targetDir = cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
+        const outputFile = path.join(targetDir, `${cut.prefix}${Date.now()}.mp4`);
 
-        const inputFile = path.join(RAW_DIR, fileName);
-        const outputFile = path.join(targetDir, `${prefix}${Date.now()}.mp4`);
+        console.log(`✂️ Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
 
-        console.log(`✂️ Schneide für ${target.toUpperCase()}: ${fileName}`);
-
-        const cmd = `"${ffmpegPath}" -i "${inputFile}" -ss ${inTime} -to ${outTime} -c copy -y "${outputFile}"`;
-
-        exec(cmd, (error) => {
+        execFile(ffmpegPath, buildFfmpegArgs(cut, outputFile), { windowsHide: true }, (error) => {
             if (error) {
                 socket.emit('cut_error', error.message);
                 return;
             }
-            socket.emit('cut_success', { file: path.basename(outputFile), target: target });
+            socket.emit('cut_success', { file: path.basename(outputFile), target: cut.target });
         });
     });
 });
