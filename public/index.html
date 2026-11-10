@@ -65,6 +65,8 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 @media(prefers-reduced-motion:reduce){*{transition:none!important}
 }
 
+
+body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-template-columns:minmax(0,1fr) 410px;gap:12px}.main-panel>.card{height:100%;display:flex;flex-direction:column}.video-container{flex:1;min-height:0;aspect-ratio:auto}.side-panel{height:100%;display:flex;flex-direction:column;gap:10px}.controls{margin:0;padding:12px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}.export{padding-top:10px;flex-wrap:wrap}.transport{justify-content:flex-start}.side-panel>.card:not(.controls):not(.activity){min-height:80px;flex:1;display:flex;flex-direction:column}#clip-list{min-height:0;max-height:none;overflow:auto}.library-header,.library-footer{padding:10px}.activity{margin:0;flex-shrink:0}#status-log{height:60px}.section-head{padding:10px}.btn{padding:7px 10px}@media(max-width:760px){.workspace{height:auto}.layout{display:flex;flex-direction:column}.main-panel,.side-panel{width:100%;height:auto}.video-container{aspect-ratio:16/9}#clip-list{max-height:200px}}
 </style></head><body>
 <main class="workspace">
 <div class="layout">
@@ -83,6 +85,9 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 </div>
 <div class="file-bar" id="current-file">Kein Clip geladen</div>
 </div>
+
+</section>
+<aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="controls card">
 <div class="mark">
 <button class="btn" onclick="setIn()">IN setzen</button>
@@ -106,8 +111,6 @@ input:not([type=checkbox]){width:100%;margin-top:7px;padding:10px;background:#0c
 </div>
 </div>
 
-</section>
-<aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="card">
 <div class="library-header">
 <h2 style="font-size:18px;margin-top:5px">Gesammelte Clips</h2>
