@@ -46,7 +46,11 @@ try {
     & npm ci --ignore-scripts
     Assert-LastCommand 'npm ci'
 
-    $ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+    # Pick up installations made after this terminal was opened before invoking winget.
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $env:Path = (@($env:Path, $machinePath, $userPath) | Where-Object { $_ }) -join ';'
+    $ffmpegCommand = Get-Command ffmpeg.exe -CommandType Application -ErrorAction SilentlyContinue
     if (-not $ffmpegCommand -and -not $SkipFfmpegInstall) {
         if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
             throw 'ffmpeg fehlt und winget wurde nicht gefunden. Installiere Gyan.FFmpeg oder nutze FFMPEG_PATH.'

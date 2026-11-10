@@ -35,3 +35,20 @@ ${block}
         fs.rmSync(directory, { recursive: true, force: true });
     }
 });
+
+test('setup refreshes PATH before checking an existing FFmpeg installation', { skip: process.platform !== 'win32' }, () => {
+    const source = fs.readFileSync(path.join(__dirname, '../scripts/setup.ps1'), 'utf8');
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'obs-ffmpeg-'));
+    try {
+        const executable = path.join(directory, 'ffmpeg.exe');
+        fs.copyFileSync(process.execPath, executable);
+        const block = source.slice(source.indexOf('    # Pick up installations'), source.indexOf('    if (-not $ffmpegCommand'));
+        assert.ok(block.includes("GetEnvironmentVariable('Path', 'User')"));
+        const script = path.join(directory, 'detect.ps1');
+        fs.writeFileSync(script, `$env:Path = ''\n${block.replace("[Environment]::GetEnvironmentVariable('Path', 'Machine')", "''").replace("[Environment]::GetEnvironmentVariable('Path', 'User')", `'${directory.replaceAll("'", "''")}'`)}\nif ($ffmpegCommand.Source -ne '${executable.replaceAll("'", "''")}') { throw 'Existing FFmpeg not detected' }`);
+        const result = spawnSync('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], { encoding: 'utf8' });
+        assert.equal(result.status, 0, result.stderr);
+    } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+    }
+});
