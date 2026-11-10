@@ -18,11 +18,11 @@ for (const staleFailure of [false, true]) {
         const newer = vm.runInContext('loadClipDurations()', context);
         requests[1].resolve({ ok: true, json: async () => ({ round: 0, match: 3661 }) });
         await newer;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 � Map: 0:00:00');
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 · Map: 0:00:00');
         if (staleFailure) requests[0].reject(new Error('old failure'));
         else requests[0].resolve({ ok: true, json: async () => ({ round: 10, match: 20 }) });
         await older;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 � Map: 0:00:00');
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 · Map: 0:00:00');
         const failed = vm.runInContext('loadClipDurations()', context);
         requests[2].resolve({ ok: false });
         await failed;

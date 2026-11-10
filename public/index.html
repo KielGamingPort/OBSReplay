@@ -89,7 +89,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
 </section>
 <aside class="side-panel" aria-label="Clip-Mediathek">
 <div class="controls card">
-<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><button class="btn" onclick="endTournament()">Turnier exportieren</button><button class="btn" onclick="nextMap()">N�chste Map</button><span id="match-state">Match: ?</span></div>
+<div class="panel-actions"><button class="btn" onclick="setupMatch()">Match einrichten</button><button class="btn" onclick="endTournament()">Turnier exportieren</button><button class="btn" onclick="nextMap()">Nächste Map</button><span id="match-state">Match: ?</span></div>
 <div class="mark">
 <button class="btn" onclick="setIn()">IN setzen</button>
 <div class="time-box" id="in-display">IN: 0.00s</div>
@@ -191,7 +191,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
                 showMatch(state);
             } catch (error) { logMessage(error.message); }
         }
-        function showMatch(state) { document.getElementById('match-state').textContent = `Match: ${state.match?.number ?? '?'} � Map: ${state.map}`; }
+        function showMatch(state) { document.getElementById('match-state').textContent = `Match: ${state.match?.number ?? '?'} · Map: ${state.map}`; }
         async function setupMatch() {
             const tournament = prompt('Challonge Turnier-ID (bei Community: community-turnier)');
             if (!tournament) return;
@@ -201,7 +201,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
                 if (!response.ok) throw new Error(matches.error);
                 const number = Number(prompt('Matchnummer: ' + matches.map(m => m.number).join(', ')));
                 const match = matches.find(m => m.number === number);
-                if (!match) throw new Error('Ung�ltige Matchnummer');
+                if (!match) throw new Error('Ungültige Matchnummer');
                 match.tournament = prompt('Turniername:', tournament) || tournament;
                 match.team1 = prompt('Team 1:') || 'Team1';
                 match.team2 = prompt('Team 2:') || 'Team2';
@@ -346,7 +346,7 @@ body{min-width:0}.workspace{height:100dvh;padding:12px}.layout{height:100%;grid-
                     const rounded = Math.round(seconds);
                     return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
                 };
-                display.textContent = `Runde: ${format(totals.round)} · Match: ${format(totals.match)} � Map: ${format(totals.map || 0)}`;
+                display.textContent = `Runde: ${format(totals.round)} · Match: ${format(totals.match)} · Map: ${format(totals.map || 0)}`;
             } catch {
                 if (generation === durationRequestGeneration) display.textContent = 'Cliplängen nicht verfügbar';
             }
