@@ -43,6 +43,7 @@ for (const scenario of [
         const context = vm.createContext({
             fetch: async (url, options) => {
                 requests.push({ url, options });
+                if (url === '/api/match') return { ok: true, json: async () => ({ match: null, map: 1 }) };
                 return options ? { ok: true, status: 204 } : {
                     ok: scenario.status === 204, status: scenario.status
                 };
@@ -52,6 +53,8 @@ for (const scenario of [
             document: { getElementById: () => ({ hidden: true }) },
             socket: { connect: () => { connections++; } },
             loadClipList: async () => { loads++; },
+            showMatch() {},
+            logMessage() {},
             loadClipDurations: async () => {}
         });
         vm.runInContext(html.match(/        async function authenticate\(\)[\s\S]*?(?=        \/\/)/)[0], context);
@@ -61,7 +64,7 @@ for (const scenario of [
         assert.equal(prompts, scenario.prompts);
         assert.equal(connections, scenario.connections);
         assert.equal(loads, scenario.connections);
-        assert.equal(requests.length, scenario.prompts + 1);
+        assert.equal(requests.length, scenario.prompts + 1 + scenario.connections);
         if (scenario.prompts) {
             assert.equal(requests[1].options.method, 'POST');
             assert.deepEqual(JSON.parse(requests[1].options.body), { token: 'test-token' });
