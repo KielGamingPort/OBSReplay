@@ -50,6 +50,7 @@ test('cut handler reports a naming failure without starting FFmpeg', () => {
         validateCutRequest: () => ({ directoryKey: 'round', prefix: 'ROUND_' }),
         RAW_DIR: 'raw', HIGHLIGHTS_ROUND: 'round', HIGHLIGHTS_MATCH: 'match', HIGHLIGHTS_MAP: 'map',
         path,
+        randomUUID: () => 'test-id',
         clipName: () => { throw new Error('Cannot name clip'); },
         execFile: () => assert.fail('FFmpeg must not start after a naming failure')
     });

@@ -6,7 +6,7 @@
 <header class="toolbar card" aria-label="Match und Verbindungen">
 <div class="session-context"><h2 id="match-state">Kein Match · Map 1</h2><p id="match-teams">—</p></div>
 <div class="session-controls"><button class="btn" data-session-action onclick="setupMatch()">Match</button><button id="next-map" class="btn" data-session-action onclick="nextMap()" disabled>Nächste Map</button><button class="btn" data-session-action onclick="triggerReset()">Runde beenden</button><button class="btn" data-session-action onclick="endTournament()">Turnier exportieren</button></div>
-<div class="header-actions"><span id="connection-status" class="status" role="status">Regie …</span><span id="obs-status" class="status" role="status">OBS …</span><button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button><button class="btn" onclick="openSettings()">OBS</button></div>
+<div class="header-actions"><button id="remote-control" class="btn" onclick="socket.emit('claim_remote_control')" disabled title="Dieses Panel für Companion auswählen">Companion …</button><span id="connection-status" class="status" role="status">Regie …</span><span id="obs-status" class="status" role="status">OBS …</span><button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button><button class="btn" onclick="openSettings()">OBS</button></div>
 </header>
 <div class="layout">
 <section class="main-panel" aria-label="Clip bearbeiten">
@@ -28,7 +28,7 @@
 <section class="activity card" aria-label="Aktivität"><div class="section-head"><h2>Aktivität</h2></div><div id="status-log" role="log" aria-label="Systemmeldungen"></div></section>
 </aside>
 </div>
-<footer class="feedback"><div id="action-status" role="status">Bereit.</div></footer>
+<footer class="feedback"><button id="sync-retry" class="btn" onclick="synchronizeDashboard()" hidden>Aktualisieren</button><div id="action-status" role="status">Bereit.</div></footer>
 </main>
 <dialog id="login" aria-labelledby="login-title"><form id="login-form"><h2 id="login-title">Anmelden</h2><p>Für den Fernzugriff den Zugriffstoken aus der Serverkonfiguration eingeben.</p><p><label>Zugriffstoken<input id="control-token" type="password" required autocomplete="off"></label></p><div class="dialog-actions"><button class="btn btn-primary">Anmelden</button><button type="button" class="btn" onclick="document.getElementById('login').requestClose()">Abbrechen</button></div></form></dialog>
 <dialog id="settings" aria-labelledby="settings-title"><form id="settings-form"><h2 id="settings-title">OBS-Verbindung</h2><p>In OBS: Werkzeuge → WebSocket-Servereinstellungen. Server aktivieren und Adresse sowie Passwort übernehmen.</p><p><label>WebSocket-Adresse<input id="obs-url" type="url" required placeholder="ws://127.0.0.1:4455"></label></p><p><label>Passwort<input id="obs-password" type="password" autocomplete="new-password" aria-describedby="password-help"></label></p><p id="password-help">Leer lassen, um das gespeicherte Passwort beizubehalten.</p><p><label class="checkbox-label"><input id="obs-clear" type="checkbox"> Gespeichertes Passwort entfernen</label></p><p>Die Verbindung bleibt nach einem Serverneustart gespeichert.</p><p id="settings-status" class="form-status" role="status"></p><div class="dialog-actions"><button id="settings-save" class="btn btn-primary">Speichern &amp; verbinden</button><button type="button" class="btn" onclick="document.getElementById('settings').close()">Schließen</button></div></form></dialog>
@@ -52,6 +52,8 @@
         let matchState = { match: null, map: 1 };
         let sessionBusy = false;
         let obsConnected = false;
+        let lastObsConnection = null;
+        let remoteControlActive = false;
         let captureBusy = false;
         let cutPending = false;
         let matches = [];
@@ -185,8 +187,8 @@
         });
 
         const socket = io({ autoConnect: false });
-        socket.on('match_state', showMatch);
-        socket.on('connect', () => fetch('/api/match').then(r => r.json()).then(showMatch).catch(error => logMessage(error.message)));
+        let matchRequestGeneration = 0;
+        socket.on('match_state', state => { ++matchRequestGeneration; showMatch(state); });
         const player = document.getElementById('player');
         const statusLog = document.getElementById('status-log');
         const clipList = document.getElementById('clip-list');
@@ -333,22 +335,38 @@
             document.getElementById('login-retry').hidden = true;
             socket.connect();
 
-            try { await loadClipList(); await loadClipDurations(); }
-            catch (error) {
-                logMessage(error.message);
-                clipList.innerHTML = '<div class="empty-library">Clips konnten nicht geladen werden. Seite neu laden.</div>';
-            }
+
         }
 
         // Lädt alle Clips vom Server in die rechte Leiste
+        let libraryRequestGeneration = 0;
         async function loadClipList() {
+            const generation = ++libraryRequestGeneration;
             const res = await fetch('/api/files?details=1');
             if (!res.ok) throw new Error('Clips konnten nicht geladen werden.');
             const files = await res.json();
+            if (generation !== libraryRequestGeneration) return;
+            const names = new Set(files.map(file => file.name));
+            if (currentFileName && !names.has(currentFileName)) clearPlayer();
+            for (const name of clipDrafts.keys()) if (!names.has(name)) clipDrafts.delete(name);
             clipList.innerHTML = '';
             files.forEach(file => addClipToList(file.name, false, file.modifiedAt));
             if (!files.length) clipList.innerHTML = '<div class="empty-library">Keine Clips vorhanden.</div>';
+            for (const item of clipList.querySelectorAll('.clip-item')) {
+                const active = item.dataset.fileName === currentFileName;
+                item.classList.toggle('active', active); item.setAttribute('aria-pressed', String(active));
+            }
             updateClipCount();
+        }
+        async function synchronizeDashboard() {
+            const generation = ++matchRequestGeneration;
+            try {
+                await Promise.all([loadClipList(), loadClipDurations(), api('/api/match').then(state => { if (generation === matchRequestGeneration) showMatch(state); })]);
+                document.getElementById('sync-retry').hidden = true;
+            } catch (error) {
+                document.getElementById('sync-retry').hidden = false;
+                notify('Synchronisierung fehlgeschlagen: ' + error.message, true);
+            }
         }
         authenticate().catch(showAuthError);
 
@@ -365,7 +383,8 @@
                     const rounded = Math.round(seconds);
                     return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
                 };
-                display.textContent = `Runde: ${format(totals.round)} · Map: ${format(totals.map || 0)} · Match: ${format(totals.match)}`;
+                display.innerHTML = [['Runde', totals.round], ['Map', totals.map || 0], ['Match', totals.match]]
+                    .map(([label, seconds]) => `<span>${label}<strong>${format(seconds)}</strong></span>`).join('');
             } catch {
                 if (generation === durationRequestGeneration) display.textContent = 'Cliplängen nicht verfügbar';
             }
@@ -402,6 +421,7 @@
             const div = document.createElement('button');
             div.type = 'button';
             div.dataset.fileName = fileName;
+            div.title = fileName;
             div.className = 'clip-item';
             const name = document.createElement('span');
             name.className = 'clip-name'; name.textContent = fileName;
@@ -445,6 +465,23 @@
             updateControls();
         }
 
+        function clearPlayer() {
+            stopSeek(); previewingSelection = false;
+            player.pause(); player.removeAttribute('src'); player.load();
+            currentFileName = null; pendingClipPosition = null;
+            document.getElementById('empty-player').hidden = false;
+            document.getElementById('current-file').textContent = 'Kein Clip geladen';
+            document.getElementById('current-file').title = '';
+            resetMarks();
+        }
+        socket.on('remote_control_status', status => {
+            if (remoteControlActive && !status.active) stopSeek();
+            remoteControlActive = status.active;
+            const button = document.getElementById('remote-control');
+            button.disabled = status.active;
+            button.textContent = status.active ? 'Companion aktiv' : 'Companion übernehmen';
+            button.classList.toggle('btn-primary', status.active);
+        });
         socket.on('replay_error', (message) => logMessage(`OBS: ${message}`));
         function triggerReplay() {
             if (!socket.connected || !obsConnected || sessionBusy || captureBusy || cutPending) return;
@@ -455,21 +492,24 @@
                 else notify('Replay in OBS gespeichert. Der Clip erscheint, sobald die Datei bereit ist.');
             });
         }
-        socket.on('connect', () => { const badge = document.getElementById('connection-status'); badge.textContent = 'Regie verbunden'; badge.classList.add('connected'); updateControls(); });
-        socket.on('disconnect', () => { stopSeek(); obsConnected = false; cutPending = false; captureBusy = false; document.getElementById('connection-status').textContent = 'Regie getrennt'; document.getElementById('connection-status').classList.remove('connected'); document.getElementById('obs-status').textContent = 'OBS unbekannt'; document.getElementById('obs-status').classList.remove('connected'); updateControls(); notify('Verbindung verloren. Laufende Aktionen im Zielordner prüfen. Regie verbindet automatisch erneut.', true); });
+        socket.on('connect', () => { const badge = document.getElementById('connection-status'); badge.textContent = 'Regie verbunden'; badge.classList.add('connected'); updateControls(); synchronizeDashboard(); });
+        socket.on('disconnect', () => { stopSeek(); document.getElementById('remote-control').disabled = true; document.getElementById('remote-control').textContent = 'Companion getrennt'; obsConnected = false; cutPending = false; captureBusy = false; document.getElementById('connection-status').textContent = 'Regie getrennt'; document.getElementById('connection-status').classList.remove('connected'); document.getElementById('obs-status').textContent = 'OBS unbekannt'; document.getElementById('obs-status').classList.remove('connected'); updateControls(); notify('Verbindung verloren. Laufende Aktionen im Zielordner prüfen. Regie verbindet automatisch erneut.', true); });
         socket.on('connect_error', () => { document.getElementById('connection-status').textContent = 'Regie nicht erreichbar'; updateControls(); });
         socket.on('obs_status', (status) => {
             obsConnected = status.connected;
             const badge = document.getElementById('obs-status');
             badge.textContent = status.connected ? 'OBS verbunden' : 'OBS getrennt';
             badge.classList.toggle('connected', status.connected);
+            badge.title = status.error || '';
             updateControls();
-            logMessage(status.connected ? 'OBS verbunden' : `OBS getrennt${status.error ? `: ${status.error}` : ''}`);
+            if (lastObsConnection !== status.connected) logMessage(status.connected ? 'OBS verbunden' : 'OBS getrennt');
+            lastObsConnection = status.connected;
         });
         socket.on('new_replay_available', (fileName) => {
             logMessage("Neuer Clip: " + fileName);
+            loadClipList().catch(error => notify(error.message, true));
             if (!addClipToList(fileName)) return;
-            loadVideo(fileName, clipList.firstChild); // Direkt laden
+            loadVideo(fileName, clipList.firstChild);
         });
 
         function setIn() { if (!clipReady() || sessionBusy || cutPending) return; inTime = player.currentTime; document.getElementById('in-display').textContent = `${inTime.toFixed(2)} s`; updateControls(); }
@@ -506,9 +546,11 @@
             if (cmd === 'set-in') setIn();
             else if (cmd === 'set-out') setOut();
             else if (cmd === 'cut-round') cutVideo('round');
+            else if (cmd === 'cut-map') cutVideo('map');
             else if (cmd === 'cut-match') cutVideo('match');
             else if (cmd === 'play-pause') {
-                if (player.paused) player.play();
+                if (!clipReady()) return;
+                if (player.paused) player.play().catch(error => notify(error.message, true));
                 else player.pause();
             }
             else if (cmd === 'next-clip') selectNextClip();
@@ -590,17 +632,9 @@
             loadClipDurations();
             logMessage('Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
 
-            document.getElementById('empty-player').hidden = false;
-            // Sidebar leeren
+            ++libraryRequestGeneration;
             clipList.innerHTML = '<div class="empty-library">Keine Clips vorhanden.</div>';
-
-            // Aktiven Player stoppen und zurücksetzen
-            player.pause();
-            player.removeAttribute('src');
-            player.load();
-            document.getElementById('current-file').innerText = "Kein Clip geladen";
-            currentFileName = null;
-            resetMarks(); updateClipCount();
+            clearPlayer(); updateClipCount();
         });
 
         async function triggerReset() {

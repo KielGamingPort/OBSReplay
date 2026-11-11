@@ -6,6 +6,8 @@ const chokidar = require('chokidar');
 const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { randomUUID } = require('node:crypto');
+const { createRemoteControl } = require('./lib/remote-control');
 const { clipName } = require('./lib/clip-name');
 const { buildFfmpegArgs, validateCutRequest } = require('./lib/cut-video');
 const { createAccessControl } = require('./lib/auth');
@@ -43,6 +45,7 @@ const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+const remoteControl = createRemoteControl();
 const obs = new OBSWebSocket();
 const obsController = createObsController({
     client: obs,
@@ -56,10 +59,17 @@ const obsController = createObsController({
 });
 const access = createAccessControl(CONTROL_TOKEN);
 const activeCuts = new Set();
-const replaySaveGuard = createReplaySaveGuard(() => obsController.call('SaveReplayBuffer'));
+const replaySaveGuard = createReplaySaveGuard(() => {
+    if (transitionBusy || matchStore.hasPending()) {
+        const error = new Error('Replay während eines Match-/Mapwechsels nicht verfügbar.');
+        error.statusCode = 409;
+        throw error;
+    }
+    return obsController.call('SaveReplayBuffer');
+});
 const publicDirectory = path.join(__dirname, 'public');
 const remoteCommands = new Set([
-    'set-in', 'set-out', 'cut-round', 'cut-match', 'play-pause',
+    'set-in', 'set-out', 'cut-round', 'cut-map', 'cut-match', 'play-pause',
     'next-clip', 'prev-clip', 'ff-start', 'rw-start', 'seek-stop'
 ]);
 
@@ -125,7 +135,7 @@ app.post('/api/remote/:command', (req, res) => {
     }
     console.log(` Stream Deck Fernsteuerung: ${cmd}`);
     // Leitet den Befehl live an den Webbrowser weiter
-    io.emit('remote_command', cmd);
+    if (!remoteControl.dispatch(cmd)) return res.status(503).json({ error: 'Kein Regie-Panel verbunden.' });
     res.send('OK');
 });
 
@@ -193,7 +203,7 @@ app.post('/api/match', async (req, res) => {
         io.emit('clip_durations_changed');
         res.json(matchStore.get());
 
-    } catch { res.status(500).json({ error: 'Match transition failed; archived clips retained' }); }
+    } catch (error) { res.status(error.statusCode || 500).json({ error: error.statusCode === 409 ? error.message : 'Match transition failed; archived clips retained' }); }
     finally { transitionBusy = false; }
 });
 
@@ -206,7 +216,7 @@ app.post('/api/next-map', async (_req, res) => {
         io.emit('match_state', matchStore.get());
         io.emit('clip_durations_changed');
         res.json(matchStore.get());
-    } catch { res.status(500).json({ error: 'Map transition failed; archive retained' }); }
+    } catch (error) { res.status(error.statusCode || 500).json({ error: error.statusCode === 409 ? error.message : 'Map transition failed; archive retained' }); }
     finally { transitionBusy = false; }
 });
 
@@ -250,6 +260,7 @@ chokidar.watch(RAW_DIR, {
 
 // --- WEB-DASHBOARD LOGIK ---
 io.on('connection', (socket) => {
+    remoteControl.add(socket);
     socket.emit('obs_status', obsController.getStatus());
     socket.on('trigger_replay', (acknowledge) => handleReplayTrigger(
         () => replaySaveGuard.saveReplay(),
@@ -267,7 +278,7 @@ io.on('connection', (socket) => {
         try {
             cut = validateCutRequest(data, RAW_DIR);
             const targetDir = cut.directoryKey === 'map' ? HIGHLIGHTS_MAP : cut.directoryKey === 'match' ? HIGHLIGHTS_MATCH : HIGHLIGHTS_ROUND;
-            outputFile = path.join(targetDir, clipName(matchStore.get(), cut.prefix));
+            outputFile = path.join(targetDir, clipName(matchStore.get(), cut.prefix, `${Date.now()}_${randomUUID()}`));
         } catch (error) {
             socket.emit('cut_error', error.message);
             return;
@@ -275,14 +286,17 @@ io.on('connection', (socket) => {
 
         console.log(` Schneide für ${cut.target.toUpperCase()}: ${cut.fileName}`);
 
-        const child = execFile(ffmpegPath, buildFfmpegArgs(cut, outputFile), { windowsHide: true }, (error) => {
-            activeCuts.delete(child);
-            if (error) {
-                socket.emit('cut_error', error.message);
-                return;
-            }
-            io.emit('clip_durations_changed');
-            socket.emit('cut_success', { file: path.basename(outputFile), target: cut.target });
+        const temporaryFile = outputFile + '.partial';
+        const child = execFile(ffmpegPath, buildFfmpegArgs(cut, temporaryFile), { windowsHide: true }, async (error) => {
+            try {
+                if (error) throw error;
+                await fs.promises.rename(temporaryFile, outputFile);
+                io.emit('clip_durations_changed');
+                socket.emit('cut_success', { file: path.basename(outputFile), target: cut.target });
+            } catch (failure) {
+                await fs.promises.unlink(temporaryFile).catch(() => {});
+                socket.emit('cut_error', failure.message);
+            } finally { activeCuts.delete(child); }
         });
         activeCuts.add(child);
     });
@@ -306,24 +320,26 @@ udpPort.on("message", function (oscMsg) {
     if (oscMsg.address === "/replay/save") {
         replaySaveGuard.saveReplay().catch(err => console.error(err));
     } else if (oscMsg.address === "/replay/in") {
-        io.emit('remote_command', 'set-in');
+        remoteControl.dispatch('set-in');
     } else if (oscMsg.address === "/replay/out") {
-        io.emit('remote_command', 'set-out');
+        remoteControl.dispatch('set-out');
     } else if (oscMsg.address === "/replay/cut/round") {
-        io.emit('remote_command', 'cut-round');
+        remoteControl.dispatch('cut-round');
+    } else if (oscMsg.address === "/replay/cut/map") {
+        remoteControl.dispatch('cut-map');
     } else if (oscMsg.address === "/replay/cut/match") {
-        io.emit('remote_command', 'cut-match');
+        remoteControl.dispatch('cut-match');
     } else if (oscMsg.address === "/replay/playpause") {
-        io.emit('remote_command', 'play-pause');
+        remoteControl.dispatch('play-pause');
         // --- NEU: DYNAMISCHES SPULEN ---
     } else if (oscMsg.address === "/replay/ff/start") {
-        io.emit('remote_command', 'ff-start');
+        remoteControl.dispatch('ff-start');
     } else if (oscMsg.address === "/replay/rw/start") {
-        io.emit('remote_command', 'rw-start');
+        remoteControl.dispatch('rw-start');
     } else if (oscMsg.address === "/replay/seek/stop") {
-        io.emit('remote_command', 'seek-stop');
+        remoteControl.dispatch('seek-stop');
     } else if (oscMsg.address === "/replay/reset") {
-        performRoundReset().catch(err => console.error(' Fehler beim Runden-Reset:', err.message));
+        requestRoundReset().catch(err => console.error(' Fehler beim Runden-Reset:', err.message));
     }
 });
 
@@ -352,9 +368,17 @@ async function performRoundReset() {
 }
 
 // HTTP-Route für das Web-Dashboard
+async function requestRoundReset() {
+    if (transitionBusy) {
+        const error = new Error('Match-/Mapwechsel oder Export läuft bereits.');
+        error.statusCode = 409;
+        throw error;
+    }
+    return performRoundReset();
+}
 app.post('/api/reset-round', async (_req, res) => {
     try {
-        const result = await performRoundReset();
+        const result = await requestRoundReset();
         res.json(result);
     } catch (error) {
         console.error(' Fehler beim Runden-Reset:', error.message);

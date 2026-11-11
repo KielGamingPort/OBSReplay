@@ -8,7 +8,7 @@ const html = fs.readFileSync(require('node:path').join(__dirname, '../public/ind
 for (const staleFailure of [false, true]) {
     test(`duration refresh ignores stale ${staleFailure ? 'failures' : 'successes'} after reset`, async () => {
         const requests = [];
-        const display = { textContent: '' };
+        const display = { content: '', get innerHTML() { return this.content; }, set innerHTML(value) { this.content = value; }, get textContent() { return this.content; }, set textContent(value) { this.content = value; } };
         const context = vm.createContext({
             document: { getElementById: () => display },
             fetch: () => new Promise((resolve, reject) => requests.push({ resolve, reject }))
@@ -18,11 +18,12 @@ for (const staleFailure of [false, true]) {
         const newer = vm.runInContext('loadClipDurations()', context);
         requests[1].resolve({ ok: true, json: async () => ({ round: 0, match: 3661 }) });
         await newer;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
+        const newest = '<span>Runde<strong>0:00:00</strong></span><span>Map<strong>0:00:00</strong></span><span>Match<strong>1:01:01</strong></span>';
+        assert.equal(display.innerHTML, newest);
         if (staleFailure) requests[0].reject(new Error('old failure'));
         else requests[0].resolve({ ok: true, json: async () => ({ round: 10, match: 20 }) });
         await older;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
+        assert.equal(display.innerHTML, newest);
         const failed = vm.runInContext('loadClipDurations()', context);
         requests[2].resolve({ ok: false });
         await failed;
@@ -63,7 +64,7 @@ for (const scenario of [
         else await result;
         assert.equal(prompts, scenario.prompts);
         assert.equal(connections, scenario.connections);
-        assert.equal(loads, scenario.connections);
+        assert.equal(loads, 0, 'state loads when the socket connects, including reconnects');
         assert.equal(requests.length, scenario.prompts + 1);
         if (scenario.prompts) {
             assert.equal(requests[1].options.method, 'POST');
@@ -82,6 +83,7 @@ test('rollback add events do not duplicate clips or change the selected video', 
         socket: { on: (name, handler) => { handlers[name] = handler; } },
         logMessage() {},
         updateClipCount() {},
+        loadClipList: async () => {},
         loadVideo() { loads++; }
     });
     vm.runInContext(html.match(/        function addClipToList\([\s\S]*?(?=        function loadVideo)/)[0], context);
@@ -183,4 +185,78 @@ test('Companion loads the only unselected clip and then avoids reloading its dra
     vm.runInContext(html.match(/        function selectNextClip\([\s\S]*?(?=        \/\/ --- DYNAMISCHES)/)[0], context);
     vm.runInContext('selectNextClip(); selectPrevClip()', context);
     assert.equal(clicks, 1);
+});
+
+test('every socket connection, including reconnect, reloads dashboard state', () => {
+    let handler;
+    let reloads = 0;
+    vm.runInNewContext(html.match(/        socket.on\('connect', \(\) => \{ const badge[^\n]*/)[0], {
+        socket: { on: (_name, callback) => { handler = callback; } },
+        document: { getElementById: () => ({ classList: { add() {} } }) },
+        updateControls() {}, synchronizeDashboard() { reloads++; }
+    });
+    handler(); handler();
+    assert.equal(reloads, 2);
+});
+
+test('library reconciliation ignores old responses and removes an archived selected clip', async () => {
+    const requests = [];
+    let cleared = 0;
+    const list = { innerHTML: 'old', querySelectorAll: () => [] };
+    const context = vm.createContext({
+        fetch: () => new Promise(resolve => requests.push(resolve)),
+        currentFileName: 'old.mp4', clipDrafts: new Map([['old.mp4', {}]]), clipList: list,
+        clearPlayer() { context.currentFileName = null; cleared++; },
+        addClipToList: () => assert.fail('stale response must not repopulate archived clips'),
+        updateClipCount() {}
+    });
+    vm.runInContext(html.match(/        let libraryRequestGeneration = 0;[\s\S]*?(?=        async function synchronizeDashboard)/)[0], context);
+    const old = vm.runInContext('loadClipList()', context);
+    const fresh = vm.runInContext('loadClipList()', context);
+    requests[1]({ ok: true, json: async () => [] });
+    await fresh;
+    requests[0]({ ok: true, json: async () => [{ name: 'old.mp4', modifiedAt: 1 }] });
+    await old;
+    assert.equal(cleared, 1);
+    assert.equal(context.currentFileName, null);
+    assert.equal(context.clipDrafts.size, 0);
+    assert.match(list.innerHTML, /Keine Clips/);
+});
+
+test('switching clips restores independent trim drafts and selecting the same clip does not reload media', () => {
+    const nodes = {};
+    let loads = 0;
+    const player = { currentTime: 4, src: '/raw_videos/a.mp4', pause() {}, removeAttribute() { this.src = ''; }, getAttribute() { return this.src; }, load() { loads++; } };
+    const context = vm.createContext({
+        player, currentFileName: 'a.mp4', inTime: 2, outTime: 6, previewingSelection: false,
+        clipDrafts: new Map(), pendingClipPosition: null,
+        stopSeek() {}, updateControls() {}, updateClipCount() {},
+        document: { getElementById: id => nodes[id] ||= {}, querySelectorAll: () => [] }
+    });
+    vm.runInContext(html.match(/        function loadVideo\([\s\S]*?(?=        function clearPlayer)/)[0], context);
+    vm.runInContext("loadVideo('b.mp4'); inTime = 1; outTime = 3; player.currentTime = 2; loadVideo('a.mp4')", context);
+    assert.equal(context.inTime, 2);
+    assert.equal(context.outTime, 6);
+    assert.equal(context.pendingClipPosition, 4);
+    const previousLoads = loads;
+    vm.runInContext("loadVideo('a.mp4')", context);
+    assert.equal(loads, previousLoads);
+});
+
+test('losing Companion ownership releases seeking on the previous panel', () => {
+    let handler;
+    let stops = 0;
+    vm.runInNewContext(html.match(/        socket.on\('remote_control_status',[\s\S]*?\n        \}\);/)[0], {
+        remoteControlActive: false,
+        socket: { on: (_event, callback) => { handler = callback; } },
+        stopSeek() { stops++; },
+        document: { getElementById: () => ({ classList: { toggle() {} } }) }
+    });
+    handler({ active: false });
+    assert.equal(stops, 0);
+    handler({ active: true });
+    handler({ active: false });
+    assert.equal(stops, 1);
+    handler({ active: false });
+    assert.equal(stops, 1, 'routine status updates do not interrupt backup controls');
 });
