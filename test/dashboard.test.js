@@ -178,12 +178,13 @@ test('clip pagination reveals Companion selection and keeps every clip reachable
     assert.equal(nodes['clip-page'].textContent, '15 / 15');
 });
 
-test('Companion clip navigation does not reload the only clip and erase its draft', () => {
+test('Companion loads the only unselected clip and then avoids reloading its draft', () => {
     let clicks = 0;
-    const context = vm.createContext({ document: { querySelectorAll: () => [{ click() { clicks++; } }] } });
+    let active = false;
+    const context = vm.createContext({ document: { querySelectorAll: () => [{ classList: { contains: () => active }, click() { clicks++; active = true; } }] } });
     vm.runInContext(html.match(/        function selectNextClip\([\s\S]*?(?=        \/\/ --- DYNAMISCHES)/)[0], context);
     vm.runInContext('selectNextClip(); selectPrevClip()', context);
-    assert.equal(clicks, 0);
+    assert.equal(clicks, 1);
 });
 
 test('every socket connection, including reconnect, reloads dashboard state', () => {
