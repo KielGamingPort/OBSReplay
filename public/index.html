@@ -386,6 +386,7 @@
             renderClipPage(currentFileName);
         }
         new ResizeObserver(() => renderClipPage(currentFileName)).observe(clipList);
+        window.addEventListener('resize', () => renderClipPage(currentFileName));
 
         function addClipToList(fileName, prepend = true, modifiedAt = Date.now()) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;

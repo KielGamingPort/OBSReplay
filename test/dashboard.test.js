@@ -158,7 +158,8 @@ test('clip pagination reveals Companion selection and keeps every clip reachable
         clipList: { clientHeight: 300, querySelectorAll: () => items },
         currentFileName: null,
         document: { getElementById: id => nodes[id] ||= {} },
-        ResizeObserver: class { observe() {} }
+        ResizeObserver: class { observe() {} },
+        window: { addEventListener() {} }
     });
     vm.runInContext(html.match(/        let clipPage = 0;[\s\S]*?(?=        function addClipToList)/)[0], context);
     vm.runInContext('renderClipPage()', context);
