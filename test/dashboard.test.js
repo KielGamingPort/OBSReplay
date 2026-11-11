@@ -8,7 +8,7 @@ const html = fs.readFileSync(require('node:path').join(__dirname, '../public/ind
 for (const staleFailure of [false, true]) {
     test(`duration refresh ignores stale ${staleFailure ? 'failures' : 'successes'} after reset`, async () => {
         const requests = [];
-        const display = { textContent: '' };
+        const display = { content: '', get innerHTML() { return this.content; }, set innerHTML(value) { this.content = value; }, get textContent() { return this.content; }, set textContent(value) { this.content = value; } };
         const context = vm.createContext({
             document: { getElementById: () => display },
             fetch: () => new Promise((resolve, reject) => requests.push({ resolve, reject }))
@@ -18,11 +18,12 @@ for (const staleFailure of [false, true]) {
         const newer = vm.runInContext('loadClipDurations()', context);
         requests[1].resolve({ ok: true, json: async () => ({ round: 0, match: 3661 }) });
         await newer;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
+        const newest = '<span>Runde<strong>0:00:00</strong></span><span>Map<strong>0:00:00</strong></span><span>Match<strong>1:01:01</strong></span>';
+        assert.equal(display.innerHTML, newest);
         if (staleFailure) requests[0].reject(new Error('old failure'));
         else requests[0].resolve({ ok: true, json: async () => ({ round: 10, match: 20 }) });
         await older;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
+        assert.equal(display.innerHTML, newest);
         const failed = vm.runInContext('loadClipDurations()', context);
         requests[2].resolve({ ok: false });
         await failed;

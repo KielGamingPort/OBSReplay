@@ -382,7 +382,8 @@
                     const rounded = Math.round(seconds);
                     return `${Math.floor(rounded / 3600)}:${String(Math.floor(rounded / 60) % 60).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
                 };
-                display.textContent = `Runde: ${format(totals.round)} · Map: ${format(totals.map || 0)} · Match: ${format(totals.match)}`;
+                display.innerHTML = [['Runde', totals.round], ['Map', totals.map || 0], ['Match', totals.match]]
+                    .map(([label, seconds]) => `<span>${label}<strong>${format(seconds)}</strong></span>`).join('');
             } catch {
                 if (generation === durationRequestGeneration) display.textContent = 'Cliplängen nicht verfügbar';
             }

@@ -68,6 +68,8 @@ video:not([src]) { visibility:hidden; }
 .library-pager { display:flex; align-items:center; justify-content:space-between; padding:2px 6px; border-top:1px solid var(--line); color:var(--muted); font:12px Consolas,monospace; }
 .library-pager .btn { min-height:25px; padding:1px 12px; }
 .totals { border-top:1px solid var(--line); padding:6px 9px; font:12px/19px Consolas,monospace; color:var(--muted); }
+.totals:has(strong) { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; font-size:11px; line-height:18px; }
+.totals strong { display:block; font-size:12px; color:var(--text); font-weight:400; white-space:nowrap; }
 .activity { display:grid; grid-template-rows:30px minmax(0,1fr); }
 .activity .section-head { min-height:30px; }
 #status-log { padding:5px 9px; overflow:hidden; font:11px/21px Consolas,monospace; color:var(--muted); }
