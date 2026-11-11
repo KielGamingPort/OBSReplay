@@ -387,9 +387,10 @@
         }
         function changeClipPage(direction) { clipPage += direction; renderClipPage(); }
         function updateClipCount() {
-            const count = clipList.querySelectorAll('.clip-item').length;
+            const items = Array.from(clipList.querySelectorAll('.clip-item'));
+            const count = items.length;
             document.getElementById('clip-count').textContent = count;
-            document.querySelectorAll('[data-clip-nav]').forEach(button => { button.disabled = count <= 1; });
+            document.querySelectorAll('[data-clip-nav]').forEach(button => { button.disabled = count === 0 || (count === 1 && items[0].classList.contains('active')); });
             renderClipPage(currentFileName);
         }
         new ResizeObserver(() => renderClipPage(currentFileName)).observe(clipList);
@@ -428,7 +429,7 @@
             // Aktiven Clip in der Liste farblich markieren
             document.querySelectorAll('.clip-item').forEach(el => { el.classList.remove('active'); el.setAttribute('aria-pressed', 'false'); });
             if (element) { element.classList.add('active'); element.setAttribute('aria-pressed', 'true'); }
-            renderClipPage(fileName);
+            updateClipCount();
 
             player.pause();
             player.removeAttribute('src');
@@ -520,7 +521,7 @@
         // --- NAVIGATION ---
         function selectNextClip() {
             const items = Array.from(document.querySelectorAll('.clip-item'));
-            if (items.length <= 1) return;
+            if (items.length === 0 || (items.length === 1 && items[0].classList.contains('active'))) return;
             const currentIndex = items.findIndex(el => el.classList.contains('active'));
             const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
             items[nextIndex].click();
@@ -528,7 +529,7 @@
 
         function selectPrevClip() {
             const items = Array.from(document.querySelectorAll('.clip-item'));
-            if (items.length <= 1) return;
+            if (items.length === 0 || (items.length === 1 && items[0].classList.contains('active'))) return;
             const currentIndex = items.findIndex(el => el.classList.contains('active'));
             const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
             items[prevIndex].click();
