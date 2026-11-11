@@ -150,3 +150,27 @@ test('cut submission snapshots the current end without replacing the end sentine
     assert.deepEqual(JSON.parse(JSON.stringify(sent[0])), ['cut_video', { fileName: 'clip.mp4', inTime: 0, outTime: 12, target: 'map' }]);
     assert.equal(vm.runInContext('outTime', context), null);
 });
+
+test('clip pagination reveals Companion selection and keeps every clip reachable without scrolling', () => {
+    const items = Array.from({ length: 15 }, (_, index) => ({ dataset: { fileName: `${index}.mp4` }, hidden: false }));
+    const nodes = {};
+    const context = vm.createContext({
+        clipList: { clientHeight: 300, querySelectorAll: () => items },
+        currentFileName: null,
+        document: { getElementById: id => nodes[id] ||= {} },
+        ResizeObserver: class { observe() {} }
+    });
+    vm.runInContext(html.match(/        let clipPage = 0;[\s\S]*?(?=        function addClipToList)/)[0], context);
+    vm.runInContext('renderClipPage()', context);
+    assert.equal(nodes['clip-page'].textContent, '1–4 / 15');
+    vm.runInContext('changeClipPage(1)', context);
+    assert.equal(nodes['clip-page'].textContent, '5–8 / 15');
+    vm.runInContext("renderClipPage('14.mp4')", context);
+    assert.equal(nodes['clip-page'].textContent, '13–15 / 15');
+    assert.equal(items[14].hidden, false);
+    assert.equal(nodes['clips-next-page'].disabled, true);
+    context.clipList.clientHeight = 156;
+    vm.runInContext("renderClipPage('14.mp4')", context);
+    assert.equal(items[14].hidden, false);
+    assert.equal(nodes['clip-page'].textContent, '15–15 / 15');
+});

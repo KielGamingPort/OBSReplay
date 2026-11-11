@@ -1,42 +1,34 @@
 <!DOCTYPE html>
 <html lang="de">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Replay Regie</title>
-<link rel="stylesheet" href="/dashboard.css"><script src="/socket.io/socket.io.js"></script>
-</head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Replay Regie</title><link rel="stylesheet" href="/dashboard.css"><script src="/socket.io/socket.io.js"></script></head>
 <body>
 <main class="workspace">
-<header class="app-header">
-<div class="brand"><h1>Replay Regie<span style="color:var(--accent)">.</span></h1><p>Live aufnehmen. Highlights schneiden.</p></div>
-<div class="header-actions"><span id="connection-status" class="status" role="status">Regie verbindet…</span><span id="obs-status" class="status" role="status">OBS wird geprüft…</span><button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button><button class="btn" onclick="openSettings()">OBS-Verbindung</button></div>
+<header class="toolbar card" aria-label="Match und Verbindungen">
+<div class="session-context"><h2 id="match-state">Kein Match · Map 1</h2><p id="match-teams">—</p></div>
+<div class="session-controls"><button class="btn" data-session-action onclick="setupMatch()">Match</button><button id="next-map" class="btn" data-session-action onclick="nextMap()" disabled>Nächste Map</button><button class="btn" data-session-action onclick="triggerReset()">Runde beenden</button><button class="btn" data-session-action onclick="endTournament()">Turnier exportieren</button></div>
+<div class="header-actions"><span id="connection-status" class="status" role="status">Regie …</span><span id="obs-status" class="status" role="status">OBS …</span><button id="login-retry" class="btn" onclick="authenticate().catch(showAuthError)" hidden>Anmelden</button><button class="btn" onclick="openSettings()">OBS</button></div>
 </header>
-<section class="session card" aria-label="Match und Spielstand">
-<div class="session-context"><div class="eyebrow">Aktuelle Session</div><h2 id="match-state">Kein Match eingerichtet · Map 1</h2><p id="match-teams">Match einrichten oder direkt mit Replays starten.</p></div>
-<div class="session-controls"><button class="btn" data-session-action onclick="setupMatch()">Match einrichten</button><button id="session-toggle" class="btn mobile-only" aria-expanded="false" aria-controls="session-actions" onclick="toggleSessionMenu()">Mehr ⋯</button><div id="session-actions" class="session-actions"><button id="next-map" class="btn" data-session-action onclick="nextMap()" disabled>Nächste Map</button><button class="btn" data-session-action onclick="triggerReset()">Runde beenden</button><button class="btn btn-quiet" data-session-action onclick="endTournament()">Turnier exportieren</button></div></div>
-</section>
 <div class="layout">
 <section class="main-panel" aria-label="Clip bearbeiten">
-<div class="card">
-<div class="section-head"><h2>01 <span class="muted">/</span> Aufnahme &amp; Vorschau</h2><div class="capture-actions"><button id="capture-replay" class="btn btn-primary" onclick="triggerReplay()" disabled>Replay aufnehmen</button><small id="capture-hint">OBS-Verbindung prüfen</small></div></div>
-<label class="mobile-clip-picker" for="mobile-clip">Clip wählen<select id="mobile-clip" onchange="selectMobileClip(this.value)"><option value="">Noch keine Clips</option></select></label>
-<div class="video-container"><div id="empty-player" class="empty-player"><div class="empty-symbol" aria-hidden="true">▷</div><h3>Bereit für das nächste Highlight</h3><p>OBS verbinden und den Replay-Puffer starten. Dann ein Replay aufnehmen oder einen vorhandenen Clip aus der Liste wählen.</p></div><video id="player" controls preload="metadata" aria-label="Replay-Vorschau"></video></div>
-<div class="file-bar" id="current-file">Vorschau · Noch kein Clip ausgewählt</div>
-</div>
-<section class="controls card" aria-labelledby="trim-title">
-<div class="controls-title"><h2 id="trim-title">02 <span class="muted">/</span> Auswahl schneiden</h2><p>IN → OUT → Ziel wählen</p></div>
+<section class="preview card">
+<div class="section-head"><h2 id="current-file">Kein Clip geladen</h2><div class="capture-actions"><small id="capture-hint">OBS prüfen</small><button id="capture-replay" class="btn" onclick="triggerReplay()" disabled>Replay speichern</button></div></div>
+<div class="video-container"><div id="empty-player" class="empty-player">Kein Clip geladen</div><video id="player" controls preload="metadata" aria-label="Replay-Vorschau"></video></div>
+<div class="player-readout"><span id="playback-time">00:00.00 / 00:00.00</span><span id="selection-readout">IN 0.00 · OUT Ende</span></div>
+</section>
+<section class="controls card" aria-label="Schnitt und Wiedergabe">
 <fieldset id="trim-fields" class="trim-fields" disabled aria-label="Schnittmarken und Wiedergabe">
-<div class="trim-row"><div class="marks"><div class="mark"><button class="btn" onclick="setIn()">IN setzen</button><input class="time-box" id="in-display" type="number" min="0" step="0.01" value="0.00" aria-label="IN-Marke in Sekunden" onchange="setMarkFromInput('in',this)"></div><div class="mark"><button class="btn" onclick="setOut()">OUT setzen</button><input class="time-box" id="out-display" type="number" min="0" step="0.01" placeholder="Ende" aria-label="OUT-Marke in Sekunden, leer für Clipende" onchange="setMarkFromInput('out',this)"></div></div>
-<div class="transport"><button class="btn" aria-label="Zurückspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">◀◀ Zurück</button><button class="btn" aria-label="Vorspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">Vor ▶▶</button><button class="btn btn-quiet" onclick="resetMarks()">Marken löschen</button><button id="preview-selection" class="btn" onclick="previewSelection()">Auswahl abspielen</button></div></div><p class="seek-hint">Zum Spulen gedrückt halten.</p>
+<div class="trim-row"><div class="marks"><div class="mark"><button class="btn" onclick="setIn()">IN</button><input class="time-box" id="in-display" type="number" min="0" step="0.01" value="0.00" aria-label="IN-Marke in Sekunden" onchange="setMarkFromInput('in',this)"></div><div class="mark"><button class="btn" onclick="setOut()">OUT</button><input class="time-box" id="out-display" type="number" min="0" step="0.01" placeholder="Ende" aria-label="OUT-Marke in Sekunden, leer für Clipende" onchange="setMarkFromInput('out',this)"></div></div>
+<div class="transport"><button class="btn" aria-label="Zurückspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">◀◀</button><button class="btn" aria-label="Vorspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">▶▶</button><button class="btn" onclick="resetMarks()">Marken löschen</button><button id="preview-selection" class="btn" onclick="previewSelection()">Auswahl abspielen</button></div></div>
 <div id="selection-track" class="selection-track" role="img" aria-label="Noch keine Auswahl"><span class="range-marker range-in">IN</span><span class="range-marker range-out">OUT</span></div></fieldset>
-<p id="selection-status" class="selection-summary" role="status">Zuerst einen Clip aus der Liste wählen.</p>
-<div class="export"><div class="export-copy"><h3>Auswahl speichern</h3><p>Originalclip bleibt erhalten.</p></div><div class="export-buttons"><button class="btn" data-cut-target="round" onclick="cutVideo('round')" disabled>In Runde<small>bis Rundenende</small></button><button class="btn" data-cut-target="map" onclick="cutVideo('map')" disabled>In Map<small>bis Mapende</small></button><button class="btn" data-cut-target="match" onclick="cutVideo('match')" disabled>In Match<small>bis Matchende</small></button></div></div>
+<div class="export"><p id="selection-status" class="selection-summary" role="status">Kein Clip geladen</p><div class="export-buttons"><button class="btn" data-cut-target="round" onclick="cutVideo('round')" disabled>In Runde</button><button class="btn" data-cut-target="map" onclick="cutVideo('map')" disabled>In Map</button><button class="btn" data-cut-target="match" onclick="cutVideo('match')" disabled>In Match</button></div></div>
 </section>
 </section>
-<aside class="side-panel" aria-label="Clip-Mediathek"><section class="card"><div class="library-header"><h2>Clips dieser Runde</h2><span id="clip-count" class="count" aria-label="Anzahl Clips">0</span></div><div id="clip-list"><div class="empty-library">Clips werden geladen…</div></div><div class="library-footer">Clip wählen → in der Vorschau schneiden</div><div id="clip-durations" class="totals" role="status">Runde: … · Map: … · Match: …</div></section><p class="empty-help">Runde → Map → Match<br>Gespeicherte Auswahlen bleiben bis zum jeweiligen Abschluss erhalten.</p></aside>
+<aside class="side-panel" aria-label="Clip-Mediathek">
+<section class="library card"><div class="section-head"><h2>Clips <span id="clip-count" class="count">0</span></h2><div class="panel-actions"><button class="btn" onclick="selectPrevClip()" aria-label="Vorherigen Clip laden">◀</button><button class="btn" onclick="selectNextClip()" aria-label="Nächsten Clip laden">▶</button></div></div><div id="clip-list"><div class="empty-library">Clips werden geladen…</div></div><div class="library-pager"><button id="clips-prev-page" class="btn" onclick="changeClipPage(-1)" aria-label="Vorherige Clipseite">‹</button><span id="clip-page" role="status">0 / 0</span><button id="clips-next-page" class="btn" onclick="changeClipPage(1)" aria-label="Nächste Clipseite">›</button></div><div id="clip-durations" class="totals" role="status">Runde: … · Map: … · Match: …</div></section>
+<section class="activity card" aria-label="Aktivität"><div class="section-head"><h2>Aktivität</h2></div><div id="status-log" role="log" aria-label="Systemmeldungen"></div></section>
+</aside>
 </div>
-<div id="action-status" class="action-status" role="status" hidden></div>
-<details class="activity card"><summary>Aktivität <span>Systemmeldungen und letzte Aktionen</span></summary><div id="status-log" role="log" aria-label="Systemmeldungen">Regie gestartet.</div></details>
+<footer class="feedback"><div id="action-status" role="status">Bereit.</div></footer>
 </main>
 <dialog id="login" aria-labelledby="login-title"><form id="login-form"><h2 id="login-title">Anmelden</h2><p>Für den Fernzugriff den Zugriffstoken aus der Serverkonfiguration eingeben.</p><p><label>Zugriffstoken<input id="control-token" type="password" required autocomplete="off"></label></p><div class="dialog-actions"><button class="btn btn-primary">Anmelden</button><button type="button" class="btn" onclick="document.getElementById('login').requestClose()">Abbrechen</button></div></form></dialog>
 <dialog id="settings" aria-labelledby="settings-title"><form id="settings-form"><h2 id="settings-title">OBS-Verbindung</h2><p>In OBS: Werkzeuge → WebSocket-Servereinstellungen. Server aktivieren und Adresse sowie Passwort übernehmen.</p><p><label>WebSocket-Adresse<input id="obs-url" type="url" required placeholder="ws://127.0.0.1:4455"></label></p><p><label>Passwort<input id="obs-password" type="password" autocomplete="new-password" aria-describedby="password-help"></label></p><p id="password-help">Leer lassen, um das gespeicherte Passwort beizubehalten.</p><p><label class="checkbox-label"><input id="obs-clear" type="checkbox"> Gespeichertes Passwort entfernen</label></p><p>Die Verbindung bleibt nach einem Serverneustart gespeichert.</p><p id="settings-status" class="form-status" role="status"></p><div class="dialog-actions"><button id="settings-save" class="btn btn-primary">Speichern &amp; verbinden</button><button type="button" class="btn" onclick="document.getElementById('settings').close()">Schließen</button></div></form></dialog>
@@ -63,15 +55,6 @@
         let captureBusy = false;
         let cutPending = false;
         let matches = [];
-        function toggleSessionMenu() {
-            const expanded = document.getElementById('session-actions').classList.toggle('expanded');
-            document.getElementById('session-toggle').setAttribute('aria-expanded', String(expanded));
-        }
-        function selectMobileClip(file) {
-            const clip = Array.from(clipList.children).find(clip => clip.dataset.fileName === file);
-            if (clip) clip.click();
-            else document.getElementById('mobile-clip').value = currentFileName || '';
-        }
         async function api(url, options) {
             const response = await fetch(url, options);
             const result = await response.json();
@@ -82,6 +65,7 @@
             const status = document.getElementById('action-status');
             status.hidden = false;
             status.textContent = message;
+            status.title = message;
             status.classList.toggle('error', error);
             logMessage(message);
         }
@@ -106,8 +90,8 @@
         }
         function showMatch(state) {
             matchState = state;
-            document.getElementById('match-state').textContent = state.match ? `Match ${state.match.number} · Map ${state.map}` : `Kein Match eingerichtet · Map ${state.map}`;
-            document.getElementById('match-teams').textContent = state.match ? `${state.match.tournament || 'Turnier'} · ${state.match.team1 || 'Team 1'} vs. ${state.match.team2 || 'Team 2'}` : 'Match einrichten oder direkt mit Replays starten.';
+            document.getElementById('match-state').textContent = state.match ? `Match ${state.match.number} · Map ${state.map}` : `Kein Match · Map ${state.map}`;
+            document.getElementById('match-teams').textContent = state.match ? `${state.match.tournament || 'Turnier'} · ${state.match.team1 || 'Team 1'} vs. ${state.match.team2 || 'Team 2'}` : '—';
             updateControls();
         }
         function setupMatch() {
@@ -225,8 +209,8 @@
             const blocked = sessionBusy || cutPending || captureBusy;
             const ready = clipReady();
             document.getElementById('capture-replay').disabled = !connected || !obsConnected || blocked;
-            document.getElementById('capture-replay').textContent = captureBusy ? 'Wird aufgenommen…' : 'Replay aufnehmen';
-            document.getElementById('capture-hint').textContent = !connected ? 'Regie-Verbindung erforderlich' : !obsConnected ? 'Zuerst OBS verbinden' : 'OBS Replay-Puffer muss aktiv sein';
+            document.getElementById('capture-replay').textContent = captureBusy ? 'Speichere…' : 'Replay speichern';
+            document.getElementById('capture-hint').textContent = !connected ? 'Regie-Verbindung erforderlich' : !obsConnected ? 'Zuerst OBS verbinden' : 'Replay-Puffer';
             document.getElementById('trim-fields').disabled = !ready || blocked;
             document.querySelectorAll('[data-cut-target]').forEach(button => {
                 button.disabled = !connected || !ready || blocked || inTime >= selectionEnd();
@@ -236,7 +220,7 @@
             const summary = document.getElementById('selection-status');
             const invalid = ready && inTime >= selectionEnd();
             summary.classList.toggle('error', invalid);
-            summary.textContent = !currentFileName ? 'Zuerst einen Clip aus der Liste wählen.' : !ready ? 'Clip wird geladen. Bei einem Wiedergabefehler einen anderen Clip wählen.' : invalid ? 'OUT muss nach IN liegen. Marken korrigieren oder löschen.' : `Auswahl: ${(selectionEnd() - inTime).toFixed(2)} s von ${player.duration.toFixed(2)} s`;
+            summary.textContent = !currentFileName ? 'Kein Clip geladen' : !ready ? 'Clip wird geladen. Bei einem Wiedergabefehler einen anderen Clip wählen.' : invalid ? 'OUT muss nach IN liegen. Marken korrigieren oder löschen.' : `Auswahl: ${(selectionEnd() - inTime).toFixed(2)} s von ${player.duration.toFixed(2)} s`;
             const track = document.getElementById('selection-track');
             track.classList.toggle('unavailable', !ready);
             track.style.setProperty('--in', ready ? `${inTime / player.duration * 100}%` : '0%');
@@ -248,6 +232,7 @@
             if (document.activeElement !== inInput) inInput.value = inTime.toFixed(2);
             if (document.activeElement !== outInput) outInput.value = outTime === null ? '' : outTime.toFixed(2);
             inInput.max = outInput.max = ready ? player.duration : 0;
+            document.getElementById('selection-readout').textContent = `IN ${inTime.toFixed(2)} · OUT ${outTime === null ? 'Ende' : outTime.toFixed(2)}`;
         }
         function resetMarks() {
             inTime = 0; outTime = null;
@@ -267,12 +252,20 @@
         }
         player.addEventListener('timeupdate', () => {
             if (previewingSelection && player.currentTime >= selectionEnd()) { previewingSelection = false; player.pause(); player.currentTime = selectionEnd(); }
+            updatePlaybackReadout();
         });
         player.addEventListener('pause', () => { previewingSelection = false; });
+        function updatePlaybackReadout() {
+            const format = seconds => Number.isFinite(seconds) ? `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${(seconds % 60).toFixed(2).padStart(5, '0')}` : '00:00.00';
+            document.getElementById('playback-time').textContent = `${format(player.currentTime)} / ${format(player.duration)}`;
+        }
+        player.addEventListener('loadedmetadata', updatePlaybackReadout);
+        player.addEventListener('emptied', updatePlaybackReadout);
 
         function logMessage(msg, color = null) {
             const line = document.createElement('div');
             line.textContent = msg;
+            line.title = msg;
             if (color) line.style.color = color;
             statusLog.appendChild(line);
             while (statusLog.childElementCount > 150) statusLog.firstElementChild.remove();
@@ -339,7 +332,7 @@
             const files = await res.json();
             clipList.innerHTML = '';
             files.forEach(file => addClipToList(file.name, false, file.modifiedAt));
-            if (!files.length) clipList.innerHTML = '<div class="empty-library"><strong>Noch keine Replays</strong>Replay aufnehmen, sobald OBS verbunden ist. Neue Clips erscheinen automatisch hier.</div>';
+            if (!files.length) clipList.innerHTML = '<div class="empty-library">Keine Clips vorhanden.</div>';
             updateClipCount();
         }
         authenticate().catch(showAuthError);
@@ -364,14 +357,25 @@
         }
         socket.on('clip_durations_changed', loadClipDurations);
 
+        let clipPage = 0;
+        function renderClipPage(revealFile = null) {
+            const items = Array.from(clipList.querySelectorAll('.clip-item'));
+            const pageSize = Math.max(1, Math.floor((clipList.clientHeight - 12) / 72));
+            const selectedIndex = revealFile ? items.findIndex(item => item.dataset.fileName === revealFile) : -1;
+            if (selectedIndex >= 0) clipPage = Math.floor(selectedIndex / pageSize);
+            const pageCount = Math.ceil(items.length / pageSize);
+            clipPage = Math.max(0, Math.min(clipPage, pageCount - 1));
+            items.forEach((item, index) => { item.hidden = index < clipPage * pageSize || index >= (clipPage + 1) * pageSize; });
+            document.getElementById('clip-page').textContent = items.length ? `${clipPage * pageSize + 1}–${Math.min((clipPage + 1) * pageSize, items.length)} / ${items.length}` : '0 / 0';
+            document.getElementById('clips-prev-page').disabled = clipPage === 0;
+            document.getElementById('clips-next-page').disabled = clipPage >= pageCount - 1;
+        }
+        function changeClipPage(direction) { clipPage += direction; renderClipPage(); }
         function updateClipCount() {
             document.getElementById('clip-count').textContent = clipList.querySelectorAll('.clip-item').length;
-            const select = document.getElementById('mobile-clip');
-            select.replaceChildren(new Option('Clip wählen…', ''));
-            for (const clip of clipList.querySelectorAll('.clip-item')) select.add(new Option(clip.dataset.fileName, clip.dataset.fileName));
-            select.value = currentFileName || '';
-            select.disabled = select.options.length === 1;
+            renderClipPage(currentFileName);
         }
+        new ResizeObserver(() => renderClipPage(currentFileName)).observe(clipList);
 
         function addClipToList(fileName, prepend = true, modifiedAt = Date.now()) {
             if (Array.from(clipList.children).some(clip => clip.dataset.fileName === fileName)) return false;
@@ -398,12 +402,13 @@
             stopSeek();
             previewingSelection = false;
             currentFileName = fileName;
-            document.getElementById('mobile-clip').value = fileName;
             document.getElementById('current-file').innerText = "Schneide: " + fileName;
+            document.getElementById('current-file').title = fileName;
 
             // Aktiven Clip in der Liste farblich markieren
             document.querySelectorAll('.clip-item').forEach(el => { el.classList.remove('active'); el.setAttribute('aria-pressed', 'false'); });
             if (element) { element.classList.add('active'); element.setAttribute('aria-pressed', 'true'); }
+            renderClipPage(fileName);
 
             player.pause();
             player.removeAttribute('src');
