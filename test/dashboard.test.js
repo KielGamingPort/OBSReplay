@@ -18,11 +18,11 @@ for (const staleFailure of [false, true]) {
         const newer = vm.runInContext('loadClipDurations()', context);
         requests[1].resolve({ ok: true, json: async () => ({ round: 0, match: 3661 }) });
         await newer;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 · Map: 0:00:00');
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
         if (staleFailure) requests[0].reject(new Error('old failure'));
         else requests[0].resolve({ ok: true, json: async () => ({ round: 10, match: 20 }) });
         await older;
-        assert.equal(display.textContent, 'Runde: 0:00:00 · Match: 1:01:01 · Map: 0:00:00');
+        assert.equal(display.textContent, 'Runde: 0:00:00 · Map: 0:00:00 · Match: 1:01:01');
         const failed = vm.runInContext('loadClipDurations()', context);
         requests[2].resolve({ ok: false });
         await failed;
@@ -78,9 +78,10 @@ test('rollback add events do not duplicate clips or change the selected video', 
     let loads = 0;
     const context = vm.createContext({
         clipList: { children, prepend: node => children.unshift(node), append: node => children.push(node) },
-        document: { createElement: () => ({ dataset: {} }) },
+        document: { createElement: () => ({ dataset: {}, append() {}, setAttribute() {} }) },
         socket: { on: (name, handler) => { handlers[name] = handler; } },
         logMessage() {},
+        updateClipCount() {},
         loadVideo() { loads++; }
     });
     vm.runInContext(html.match(/        function addClipToList\([\s\S]*?(?=        function loadVideo)/)[0], context);
@@ -103,4 +104,83 @@ test('dashboard displays replay save failures', () => {
     });
     handler('SaveReplayBuffer failed');
     assert.match(message, /SaveReplayBuffer failed/);
+});
+
+function trimContext() {
+    const nodes = new Map();
+    const node = id => {
+        if (!nodes.has(id)) nodes.set(id, { textContent: '', classList: { toggle() {} }, style: { setProperty() {} }, setAttribute() {} });
+        return nodes.get(id);
+    };
+    const cuts = [{}, {}, {}];
+    const sessions = [{}, {}];
+    const sent = [];
+    const context = vm.createContext({
+        currentFileName: null, player: { readyState: 0, duration: NaN, currentTime: 0 },
+        inTime: 0, outTime: null, sessionBusy: false, captureBusy: false, cutPending: false,
+        obsConnected: false, matchState: { match: null },
+        socket: { connected: true, emit: (...args) => sent.push(args) },
+        document: { getElementById: node, querySelectorAll: selector => selector === '[data-cut-target]' ? cuts : sessions },
+        notify() {}
+    });
+    vm.runInContext(html.match(/        function clipReady\([\s\S]*?(?=        player.addEventListener)/)[0], context);
+    vm.runInContext(html.match(/        function setIn\([\s\S]*?(?=        socket.on\('cut_success')/)[0], context);
+    return { context, node, cuts, sent };
+}
+
+test('trim controls require media metadata and recover from an invalid range', () => {
+    const { context, node, cuts } = trimContext();
+    vm.runInContext('updateControls()', context);
+    assert.equal(node('trim-fields').disabled, true);
+    assert.ok(cuts.every(button => button.disabled));
+    vm.runInContext("currentFileName = 'clip.mp4'; player.readyState = 1; player.duration = 12; updateControls()", context);
+    assert.equal(node('trim-fields').disabled, false);
+    assert.ok(cuts.every(button => !button.disabled));
+    vm.runInContext('player.currentTime = 0; setOut()', context);
+    assert.ok(cuts.every(button => button.disabled), 'explicit OUT at zero is an invalid range, not the end sentinel');
+    vm.runInContext('resetMarks()', context);
+    assert.ok(cuts.every(button => !button.disabled));
+    assert.match(node('selection-status').textContent, /12.00/);
+});
+
+test('cut submission snapshots the current end without replacing the end sentinel and prevents duplicates', () => {
+    const { context, sent } = trimContext();
+    vm.runInContext("currentFileName = 'clip.mp4'; player.readyState = 1; player.duration = 12; cutVideo('map'); cutVideo('map')", context);
+    assert.equal(sent.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(sent[0])), ['cut_video', { fileName: 'clip.mp4', inTime: 0, outTime: 12, target: 'map' }]);
+    assert.equal(vm.runInContext('outTime', context), null);
+});
+
+test('clip pagination reveals Companion selection and keeps every clip reachable without scrolling', () => {
+    const items = Array.from({ length: 15 }, (_, index) => ({ dataset: { fileName: `${index}.mp4` }, hidden: false }));
+    const nodes = {};
+    const context = vm.createContext({
+        clipList: { clientHeight: 250, querySelectorAll: () => items },
+        currentFileName: null,
+        document: { getElementById: id => nodes[id] ||= {} },
+        ResizeObserver: class { observe() {} },
+        window: { addEventListener() {} }
+    });
+    vm.runInContext(html.match(/        let clipPage = 0;[\s\S]*?(?=        function addClipToList)/)[0], context);
+    vm.runInContext('renderClipPage()', context);
+    assert.equal(nodes['clip-page'].textContent, '1–4 / 15');
+    vm.runInContext('changeClipPage(1)', context);
+    assert.equal(nodes['clip-page'].textContent, '5–8 / 15');
+    vm.runInContext("renderClipPage('14.mp4')", context);
+    assert.equal(nodes['clip-page'].textContent, '13–15 / 15');
+    assert.equal(items[14].hidden, false);
+    assert.equal(nodes['clips-next-page'].disabled, true);
+    context.clipList.clientHeight = 130;
+    vm.runInContext("renderClipPage('14.mp4')", context);
+    assert.equal(items[14].hidden, false);
+    assert.equal(nodes['clip-page'].textContent, '15 / 15');
+});
+
+test('Companion loads the only unselected clip and then avoids reloading its draft', () => {
+    let clicks = 0;
+    let active = false;
+    const context = vm.createContext({ document: { querySelectorAll: () => [{ classList: { contains: () => active }, click() { clicks++; active = true; } }] } });
+    vm.runInContext(html.match(/        function selectNextClip\([\s\S]*?(?=        \/\/ --- DYNAMISCHES)/)[0], context);
+    vm.runInContext('selectNextClip(); selectPrevClip()', context);
+    assert.equal(clicks, 1);
 });

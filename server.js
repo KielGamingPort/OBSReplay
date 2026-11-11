@@ -65,6 +65,7 @@ const remoteCommands = new Set([
 
 app.use(express.json({ limit: '4kb' }));
 app.get('/', (_req, res) => res.sendFile(path.join(publicDirectory, 'index.html')));
+app.get('/dashboard.css', (_req, res) => res.sendFile(path.join(publicDirectory, 'dashboard.css')));
 
 app.post('/api/session', (req, res) => {
     if (!access.establishSession(req, res)) {
@@ -129,8 +130,8 @@ app.post('/api/remote/:command', (req, res) => {
 });
 
 // Liefert alle bisherigen Clips für die Web-Galerie
-app.get('/api/files', async (_req, res) => {
-    res.json(await listReplayFiles(RAW_DIR));
+app.get('/api/files', async (req, res) => {
+    res.json(await listReplayFiles(RAW_DIR, undefined, req.query.details === '1'));
 });
 
 // Probe the saved files so totals also include clips from earlier sessions.

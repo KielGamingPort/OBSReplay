@@ -40,6 +40,9 @@ test('lists MP4 clips newest first and ignores other entries', async () => {
 
     try {
         assert.deepEqual(await listReplayFiles(directory), ['supported.mkv', 'newer.MP4', 'older.mp4']);
+        const details = await listReplayFiles(directory, undefined, true);
+        assert.deepEqual(details.map(file => file.name), ['supported.mkv', 'newer.MP4', 'older.mp4']);
+        assert.equal(details[0].modifiedAt, new Date('2026-03-01').getTime());
     } finally {
         fs.rmSync(directory, { recursive: true, force: true });
     }
