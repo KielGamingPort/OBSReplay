@@ -220,3 +220,23 @@ test('library reconciliation ignores old responses and removes an archived selec
     assert.equal(context.clipDrafts.size, 0);
     assert.match(list.innerHTML, /Keine Clips/);
 });
+
+test('switching clips restores independent trim drafts and selecting the same clip does not reload media', () => {
+    const nodes = {};
+    let loads = 0;
+    const player = { currentTime: 4, src: '/raw_videos/a.mp4', pause() {}, removeAttribute() { this.src = ''; }, getAttribute() { return this.src; }, load() { loads++; } };
+    const context = vm.createContext({
+        player, currentFileName: 'a.mp4', inTime: 2, outTime: 6, previewingSelection: false,
+        clipDrafts: new Map(), pendingClipPosition: null,
+        stopSeek() {}, updateControls() {}, renderClipPage() {},
+        document: { getElementById: id => nodes[id] ||= {}, querySelectorAll: () => [] }
+    });
+    vm.runInContext(html.match(/        function loadVideo\([\s\S]*?(?=        function clearPlayer)/)[0], context);
+    vm.runInContext("loadVideo('b.mp4'); inTime = 1; outTime = 3; player.currentTime = 2; loadVideo('a.mp4')", context);
+    assert.equal(context.inTime, 2);
+    assert.equal(context.outTime, 6);
+    assert.equal(context.pendingClipPosition, 4);
+    const previousLoads = loads;
+    vm.runInContext("loadVideo('a.mp4')", context);
+    assert.equal(loads, previousLoads);
+});
