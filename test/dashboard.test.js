@@ -174,3 +174,11 @@ test('clip pagination reveals Companion selection and keeps every clip reachable
     assert.equal(items[14].hidden, false);
     assert.equal(nodes['clip-page'].textContent, '15–15 / 15');
 });
+
+test('Companion clip navigation does not reload the only clip and erase its draft', () => {
+    let clicks = 0;
+    const context = vm.createContext({ document: { querySelectorAll: () => [{ click() { clicks++; } }] } });
+    vm.runInContext(html.match(/        function selectNextClip\([\s\S]*?(?=        \/\/ --- DYNAMISCHES)/)[0], context);
+    vm.runInContext('selectNextClip(); selectPrevClip()', context);
+    assert.equal(clicks, 0);
+});

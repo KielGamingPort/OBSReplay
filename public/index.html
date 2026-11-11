@@ -24,7 +24,7 @@
 </section>
 </section>
 <aside class="side-panel" aria-label="Clip-Mediathek">
-<section class="library card"><div class="section-head"><h2>Clips <span id="clip-count" class="count">0</span></h2><div class="panel-actions"><button class="btn" onclick="selectPrevClip()" aria-label="Vorherigen Clip laden">◀</button><button class="btn" onclick="selectNextClip()" aria-label="Nächsten Clip laden">▶</button></div></div><div id="clip-list"><div class="empty-library">Clips werden geladen…</div></div><div class="library-pager"><button id="clips-prev-page" class="btn" onclick="changeClipPage(-1)" aria-label="Vorherige Clipseite">‹</button><span id="clip-page" role="status">0 / 0</span><button id="clips-next-page" class="btn" onclick="changeClipPage(1)" aria-label="Nächste Clipseite">›</button></div><div id="clip-durations" class="totals" role="status">Runde: … · Map: … · Match: …</div></section>
+<section class="library card"><div class="section-head"><h2>Clips <span id="clip-count" class="count">0</span></h2><div class="panel-actions"><button class="btn" data-clip-nav onclick="selectPrevClip()" aria-label="Vorherigen Clip laden" title="Vorherigen Clip laden">◀ Clip</button><button class="btn" data-clip-nav onclick="selectNextClip()" aria-label="Nächsten Clip laden" title="Nächsten Clip laden">Clip ▶</button></div></div><div id="clip-list"><div class="empty-library">Clips werden geladen…</div></div><div class="library-pager"><button id="clips-prev-page" class="btn" onclick="changeClipPage(-1)" aria-label="Vorherige Clipseite">‹</button><span id="clip-page" role="status">0 / 0</span><button id="clips-next-page" class="btn" onclick="changeClipPage(1)" aria-label="Nächste Clipseite">›</button></div><div id="clip-durations" class="totals" role="status">Runde: … · Map: … · Match: …</div></section>
 <section class="activity card" aria-label="Aktivität"><div class="section-head"><h2>Aktivität</h2></div><div id="status-log" role="log" aria-label="Systemmeldungen"></div></section>
 </aside>
 </div>
@@ -199,6 +199,8 @@
         let isSeeking = false;
         let wasPlaying = false;
         let previewingSelection = false;
+        const clipDrafts = new Map();
+        let pendingClipPosition = null;
 
         function clipReady() {
             return Boolean(currentFileName && player.readyState >= 1 && Number.isFinite(player.duration) && player.duration > 0 && !player.error);
@@ -240,7 +242,13 @@
             document.getElementById('out-display').textContent = 'Ende';
             updateControls();
         }
-        player.addEventListener('loadedmetadata', updateControls);
+        player.addEventListener('loadedmetadata', () => {
+            if (pendingClipPosition !== null) {
+                player.currentTime = Math.min(pendingClipPosition, player.duration || 0);
+                pendingClipPosition = null;
+            }
+            updateControls();
+        });
         player.addEventListener('durationchange', updateControls);
         player.addEventListener('error', () => { stopSeek(); updateControls(); notify('Clip kann nicht abgespielt werden. Browserkompatiblen Codec verwenden, z. B. H.264/AAC.', true); });
         function previewSelection() {
@@ -372,7 +380,9 @@
         }
         function changeClipPage(direction) { clipPage += direction; renderClipPage(); }
         function updateClipCount() {
-            document.getElementById('clip-count').textContent = clipList.querySelectorAll('.clip-item').length;
+            const count = clipList.querySelectorAll('.clip-item').length;
+            document.getElementById('clip-count').textContent = count;
+            document.querySelectorAll('[data-clip-nav]').forEach(button => { button.disabled = count <= 1; });
             renderClipPage(currentFileName);
         }
         new ResizeObserver(() => renderClipPage(currentFileName)).observe(clipList);
@@ -399,7 +409,9 @@
         }
 
         function loadVideo(fileName, element = null) {
+            if (currentFileName === fileName && player.getAttribute('src')) return;
             stopSeek();
+            if (currentFileName) clipDrafts.set(currentFileName, { inTime, outTime, position: player.currentTime });
             previewingSelection = false;
             currentFileName = fileName;
             document.getElementById('current-file').innerText = "Schneide: " + fileName;
@@ -417,7 +429,11 @@
             player.src = "/raw_videos/" + encodeURIComponent(fileName);
             player.load();
 
-            resetMarks();
+            const draft = clipDrafts.get(fileName);
+            inTime = draft?.inTime ?? 0;
+            outTime = draft?.outTime ?? null;
+            pendingClipPosition = draft?.position ?? 0;
+            updateControls();
         }
 
         socket.on('replay_error', (message) => logMessage(`OBS: ${message}`));
@@ -495,7 +511,7 @@
         // --- NAVIGATION ---
         function selectNextClip() {
             const items = Array.from(document.querySelectorAll('.clip-item'));
-            if (items.length === 0) return;
+            if (items.length <= 1) return;
             const currentIndex = items.findIndex(el => el.classList.contains('active'));
             const nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
             items[nextIndex].click();
@@ -503,7 +519,7 @@
 
         function selectPrevClip() {
             const items = Array.from(document.querySelectorAll('.clip-item'));
-            if (items.length === 0) return;
+            if (items.length <= 1) return;
             const currentIndex = items.findIndex(el => el.classList.contains('active'));
             const prevIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
             items[prevIndex].click();
@@ -556,6 +572,7 @@
         // Empfängt das Reset-Signal vom Server
         socket.on('reset_dashboard', () => {
             stopSeek();
+            clipDrafts.clear(); pendingClipPosition = null;
             loadClipDurations();
             logMessage('Runden-Reset ausgeführt: Ordner geleert & Backup erstellt.');
 

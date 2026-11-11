@@ -37,7 +37,7 @@ video:not([src]) { visibility:hidden; }
 .player-readout { border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:8px; padding:3px 10px; font:12px Consolas,monospace; color:var(--muted); }
 .controls { padding:10px; }
 .trim-fields { border:0; padding:0; margin:0; min-width:0; }
-.trim-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.trim-row { display:flex; align-items:center; justify-content:flex-start; gap:16px; }
 .marks { display:flex; gap:8px; min-width:0; }
 .mark { display:flex; gap:5px; align-items:center; }
 .mark input[type=number] { width:96px; min-width:0; margin:0; padding:5px 6px; min-height:30px; color:var(--accent); font:13px Consolas,monospace; }
