@@ -230,7 +230,7 @@ test('switching clips restores independent trim drafts and selecting the same cl
     const context = vm.createContext({
         player, currentFileName: 'a.mp4', inTime: 2, outTime: 6, previewingSelection: false,
         clipDrafts: new Map(), pendingClipPosition: null,
-        stopSeek() {}, updateControls() {}, renderClipPage() {},
+        stopSeek() {}, updateControls() {}, updateClipCount() {},
         document: { getElementById: id => nodes[id] ||= {}, querySelectorAll: () => [] }
     });
     vm.runInContext(html.match(/        function loadVideo\([\s\S]*?(?=        function clearPlayer)/)[0], context);
