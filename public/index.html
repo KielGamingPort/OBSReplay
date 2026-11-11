@@ -11,15 +11,15 @@
 <div class="layout">
 <section class="main-panel" aria-label="Clip bearbeiten">
 <section class="preview card">
-<div class="section-head"><h2 id="current-file">Kein Clip geladen</h2><div class="capture-actions"><small id="capture-hint">OBS prüfen</small><button id="capture-replay" class="btn" onclick="triggerReplay()" disabled>Replay speichern</button></div></div>
+<div class="section-head"><h2 id="current-file">Kein Clip geladen</h2><div class="capture-actions"><small id="capture-hint">OBS prüfen</small><button id="capture-replay" class="btn btn-capture" onclick="triggerReplay()" disabled>Replay speichern</button></div></div>
 <div class="video-container"><div id="empty-player" class="empty-player">Kein Clip geladen</div><video id="player" controls preload="metadata" aria-label="Replay-Vorschau"></video></div>
-<div class="player-readout"><span id="playback-time">00:00.00 / 00:00.00</span><span id="selection-readout">IN 0.00 · OUT Ende</span></div>
+<div class="player-readout"><span id="playback-time">00:00.00 / 00:00.00</span><span id="transport-status">Pause</span><span id="remote-last-command" title="Letzter Companion-Befehl">—</span><span id="selection-readout">IN 0.00 · OUT Ende</span></div>
 </section>
 <section class="controls card" aria-label="Schnitt und Wiedergabe">
 <fieldset id="trim-fields" class="trim-fields" disabled aria-label="Schnittmarken und Wiedergabe">
 <div class="trim-row"><div class="marks"><div class="mark"><button class="btn" onclick="setIn()">IN</button><input class="time-box" id="in-display" type="number" min="0" step="0.01" value="0.00" aria-label="IN-Marke in Sekunden" onchange="setMarkFromInput('in',this)"></div><div class="mark"><button class="btn" onclick="setOut()">OUT</button><input class="time-box" id="out-display" type="number" min="0" step="0.01" placeholder="Ende" aria-label="OUT-Marke in Sekunden, leer für Clipende" onchange="setMarkFromInput('out',this)"></div></div>
 <div class="transport"><button class="btn" aria-label="Zurückspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startRW()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startRW()}" onkeyup="stopSeek()" onblur="stopSeek()">◀◀</button><button class="btn" aria-label="Vorspulen (gedrückt halten)" title="Gedrückt halten" onpointerdown="this.focus();this.setPointerCapture(event.pointerId);startFF()" onpointerup="stopSeek()" onpointercancel="stopSeek()" onlostpointercapture="stopSeek()" onkeydown="if(!event.repeat &amp;&amp; (event.key===' ' || event.key==='Enter')){event.preventDefault();startFF()}" onkeyup="stopSeek()" onblur="stopSeek()">▶▶</button><button class="btn" onclick="resetMarks()">Marken löschen</button><button id="preview-selection" class="btn" onclick="previewSelection()">Auswahl abspielen</button></div></div>
-<div id="selection-track" class="selection-track" role="img" aria-label="Noch keine Auswahl"><span class="range-marker range-in">IN</span><span class="range-marker range-out">OUT</span></div></fieldset>
+<div id="selection-track" class="selection-track" role="img" aria-label="Noch keine Auswahl"><span id="range-playhead" class="range-playhead"></span><span class="range-marker range-in">IN</span><span class="range-marker range-out">OUT</span></div></fieldset>
 <div class="export"><p id="selection-status" class="selection-summary" role="status">Kein Clip geladen</p><div class="export-buttons"><button class="btn" data-cut-target="round" onclick="cutVideo('round')" disabled>In Runde</button><button class="btn" data-cut-target="map" onclick="cutVideo('map')" disabled>In Map</button><button class="btn" data-cut-target="match" onclick="cutVideo('match')" disabled>In Match</button></div></div>
 </section>
 </section>
@@ -196,6 +196,7 @@
         let outTime = null;
         let seekInterval;
         let seekMultiplier = 1;
+        let seekDirection = 'ff';
         let isSeeking = false;
         let wasPlaying = false;
         let previewingSelection = false;
@@ -266,9 +267,15 @@
         function updatePlaybackReadout() {
             const format = seconds => Number.isFinite(seconds) ? `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${(seconds % 60).toFixed(2).padStart(5, '0')}` : '00:00.00';
             document.getElementById('playback-time').textContent = `${format(player.currentTime)} / ${format(player.duration)}`;
+            document.getElementById('transport-status').textContent = isSeeking ? `${seekDirection === 'rw' ? '◀◀' : '▶▶'} ${seekMultiplier.toFixed(1)}×` : player.paused ? 'Pause' : 'Wiedergabe';
+            const fraction = Number.isFinite(player.duration) && player.duration > 0 ? player.currentTime / player.duration : 0;
+            document.getElementById('range-playhead').style.left = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
         }
         player.addEventListener('loadedmetadata', updatePlaybackReadout);
         player.addEventListener('emptied', updatePlaybackReadout);
+        player.addEventListener('play', updatePlaybackReadout);
+        player.addEventListener('pause', updatePlaybackReadout);
+        player.addEventListener('ratechange', updatePlaybackReadout);
 
         function logMessage(msg, color = null) {
             const line = document.createElement('div');
@@ -368,13 +375,13 @@
         let clipPage = 0;
         function renderClipPage(revealFile = null) {
             const items = Array.from(clipList.querySelectorAll('.clip-item'));
-            const pageSize = Math.max(1, Math.floor((clipList.clientHeight - 12) / 72));
+            const pageSize = Math.max(1, Math.floor((clipList.clientHeight - 12) / 58));
             const selectedIndex = revealFile ? items.findIndex(item => item.dataset.fileName === revealFile) : -1;
             if (selectedIndex >= 0) clipPage = Math.floor(selectedIndex / pageSize);
             const pageCount = Math.ceil(items.length / pageSize);
             clipPage = Math.max(0, Math.min(clipPage, pageCount - 1));
             items.forEach((item, index) => { item.hidden = index < clipPage * pageSize || index >= (clipPage + 1) * pageSize; });
-            document.getElementById('clip-page').textContent = items.length ? `${clipPage * pageSize + 1}–${Math.min((clipPage + 1) * pageSize, items.length)} / ${items.length}` : '0 / 0';
+            document.getElementById('clip-page').textContent = items.length ? `${clipPage * pageSize + 1}${clipPage * pageSize + 1 === Math.min((clipPage + 1) * pageSize, items.length) ? '' : '–' + Math.min((clipPage + 1) * pageSize, items.length)} / ${items.length}` : '0 / 0';
             document.getElementById('clips-prev-page').disabled = clipPage === 0;
             document.getElementById('clips-next-page').disabled = clipPage >= pageCount - 1;
         }
@@ -493,6 +500,7 @@
         socket.on('remote_command', (cmd) => {
             // Das zeigt dir im Browser an, dass der Befehl wirklich durchkam
             logMessage(`Stream Deck Befehl: ${cmd}`, '#f39c12');
+            document.getElementById('remote-last-command').textContent = `Companion: ${cmd}`;
 
             if (cmd === 'set-in') setIn();
             else if (cmd === 'set-out') setOut();
@@ -530,6 +538,7 @@
         function startFF() {
             if (isSeeking || !clipReady() || sessionBusy || cutPending) return;
             isSeeking = true;
+            seekDirection = 'ff';
             wasPlaying = !player.paused;
             seekMultiplier = 2.0; // Startet bei 2-facher Geschwindigkeit
 
@@ -547,6 +556,7 @@
         function startRW() {
             if (isSeeking || !clipReady() || sessionBusy || cutPending) return;
             isSeeking = true;
+            seekDirection = 'rw';
             wasPlaying = !player.paused;
 
             player.pause(); // Video anhalten, um manuell rückwärts zu springen
@@ -558,6 +568,7 @@
                     seekMultiplier += 1.0;
                 }
             }, 50); // Rattert 20-mal pro Sekunde rückwärts
+            updatePlaybackReadout();
         }
 
         function stopSeek() {
@@ -568,6 +579,7 @@
 
             if (wasPlaying) player.play().catch(() => {});
             else player.pause();
+            updatePlaybackReadout();
         }
 
         // Empfängt das Reset-Signal vom Server

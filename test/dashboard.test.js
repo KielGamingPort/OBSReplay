@@ -155,7 +155,7 @@ test('clip pagination reveals Companion selection and keeps every clip reachable
     const items = Array.from({ length: 15 }, (_, index) => ({ dataset: { fileName: `${index}.mp4` }, hidden: false }));
     const nodes = {};
     const context = vm.createContext({
-        clipList: { clientHeight: 300, querySelectorAll: () => items },
+        clipList: { clientHeight: 250, querySelectorAll: () => items },
         currentFileName: null,
         document: { getElementById: id => nodes[id] ||= {} },
         ResizeObserver: class { observe() {} },
@@ -170,10 +170,10 @@ test('clip pagination reveals Companion selection and keeps every clip reachable
     assert.equal(nodes['clip-page'].textContent, '13–15 / 15');
     assert.equal(items[14].hidden, false);
     assert.equal(nodes['clips-next-page'].disabled, true);
-    context.clipList.clientHeight = 156;
+    context.clipList.clientHeight = 130;
     vm.runInContext("renderClipPage('14.mp4')", context);
     assert.equal(items[14].hidden, false);
-    assert.equal(nodes['clip-page'].textContent, '15–15 / 15');
+    assert.equal(nodes['clip-page'].textContent, '15 / 15');
 });
 
 test('Companion clip navigation does not reload the only clip and erase its draft', () => {
