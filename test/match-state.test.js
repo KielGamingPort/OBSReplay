@@ -108,3 +108,21 @@ test('match transition archives and clears both current map and match clips', as
     assert.deepEqual(fs.readdirSync(highlights), []);
     assert.equal(store.get().map, 1);
 });
+
+test('pending recovery rejects a different match or map operation instead of acknowledging the wrong action', async t => {
+    const { root, highlights } = fixture(t);
+    let locked = true;
+    const store = createMatchStore(root, highlights, { ...fs, unlinkSync(file) {
+        if (locked && file.endsWith('old.mp4')) throw Object.assign(new Error('locked'), { code: 'EPERM' });
+        fs.unlinkSync(file);
+    } });
+    await assert.rejects(store.transition({ id: 2, number: 2 }), /locked/);
+    locked = false;
+    await assert.rejects(store.transition({ id: 3, number: 3 }), { statusCode: 409 });
+    await assert.rejects(store.nextMap(), { statusCode: 409 });
+    assert.equal(store.get().match.id, 1);
+    assert.equal(store.hasPending(), true);
+    await store.transition({ id: 2, number: 2 });
+    assert.equal(store.get().match.id, 2);
+    assert.equal(store.hasPending(), false);
+});

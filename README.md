@@ -34,3 +34,11 @@ OBS connection settings saved in the web interface persist across server restart
 Set CHALLONGE_API_KEY in the server environment. Match setup loads numbered matches from the Challonge v1 API using a tournament ID (community tournaments use community-slug). Selecting a new match archives current clips and resets the map counter to 1. Next map archives round/raw and map clips, then increments the map counter. Match clips survive map transitions.
 
 End tournament exports all archived matches, rounds, and current clips under REPLAY_ROOT/Exports. A manifest.json marks a completed export. Source files are retained, and failures can be retried. The export contains individual clips, not concatenated videos.
+
+## Operator workspace and Companion
+
+The desktop workspace fits a match at 1280×720 or larger without scrolling. Clip pages and previous/next selection remain available as backup controls; IN/OUT drafts are retained when switching clips. Companion commands go to one active panel, shown by `Companion aktiv`. Another panel can take over with `Companion übernehmen`; closing the active panel transfers control to the next connected panel. HTTP commands return 503 when no panel is connected.
+
+Map cuts are available through `POST /api/remote/cut-map` and OSC `/replay/cut/map`, alongside round and match cuts. Reconnecting reloads the clip library, match state and totals, removing clips archived while the panel was offline.
+
+Selections are encoded to H.264/AAC MP4 with accurate trim boundaries (x264 veryfast, CRF 18). Encoding uses more CPU than stream copying and introduces a generation of compression; originals are retained. In-progress files use `.partial` and become visible as completed MP4s only after encoding succeeds. A failed match/map cleanup must be retried with the original operation before a different transition can start.

@@ -63,7 +63,7 @@ for (const scenario of [
         else await result;
         assert.equal(prompts, scenario.prompts);
         assert.equal(connections, scenario.connections);
-        assert.equal(loads, scenario.connections);
+        assert.equal(loads, 0, 'state loads when the socket connects, including reconnects');
         assert.equal(requests.length, scenario.prompts + 1);
         if (scenario.prompts) {
             assert.equal(requests[1].options.method, 'POST');
@@ -82,6 +82,7 @@ test('rollback add events do not duplicate clips or change the selected video', 
         socket: { on: (name, handler) => { handlers[name] = handler; } },
         logMessage() {},
         updateClipCount() {},
+        loadClipList: async () => {},
         loadVideo() { loads++; }
     });
     vm.runInContext(html.match(/        function addClipToList\([\s\S]*?(?=        function loadVideo)/)[0], context);
@@ -182,4 +183,40 @@ test('Companion clip navigation does not reload the only clip and erase its draf
     vm.runInContext(html.match(/        function selectNextClip\([\s\S]*?(?=        \/\/ --- DYNAMISCHES)/)[0], context);
     vm.runInContext('selectNextClip(); selectPrevClip()', context);
     assert.equal(clicks, 0);
+});
+
+test('every socket connection, including reconnect, reloads dashboard state', () => {
+    let handler;
+    let reloads = 0;
+    vm.runInNewContext(html.match(/        socket.on\('connect', \(\) => \{ const badge[^\n]*/)[0], {
+        socket: { on: (_name, callback) => { handler = callback; } },
+        document: { getElementById: () => ({ classList: { add() {} } }) },
+        updateControls() {}, synchronizeDashboard() { reloads++; }
+    });
+    handler(); handler();
+    assert.equal(reloads, 2);
+});
+
+test('library reconciliation ignores old responses and removes an archived selected clip', async () => {
+    const requests = [];
+    let cleared = 0;
+    const list = { innerHTML: 'old', querySelectorAll: () => [] };
+    const context = vm.createContext({
+        fetch: () => new Promise(resolve => requests.push(resolve)),
+        currentFileName: 'old.mp4', clipDrafts: new Map([['old.mp4', {}]]), clipList: list,
+        clearPlayer() { context.currentFileName = null; cleared++; },
+        addClipToList: () => assert.fail('stale response must not repopulate archived clips'),
+        updateClipCount() {}
+    });
+    vm.runInContext(html.match(/        let libraryRequestGeneration = 0;[\s\S]*?(?=        async function synchronizeDashboard)/)[0], context);
+    const old = vm.runInContext('loadClipList()', context);
+    const fresh = vm.runInContext('loadClipList()', context);
+    requests[1]({ ok: true, json: async () => [] });
+    await fresh;
+    requests[0]({ ok: true, json: async () => [{ name: 'old.mp4', modifiedAt: 1 }] });
+    await old;
+    assert.equal(cleared, 1);
+    assert.equal(context.currentFileName, null);
+    assert.equal(context.clipDrafts.size, 0);
+    assert.match(list.innerHTML, /Keine Clips/);
 });
