@@ -1,5 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 const { createRemoteControl } = require('../lib/remote-control');
 
 function panel(id) {
@@ -29,3 +32,39 @@ test('Companion commands reach exactly one panel, support takeover and fail over
     first.handlers.disconnect();
     assert.equal(control.dispatch('cut-round'), false);
 });
+
+for (const command of ['ff-start', 'rw-start']) {
+    test(`takeover releases the previous browser's ${command} interval before stop routes to the new panel`, () => {
+        const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+        function browserPanel(id) {
+            const client = panel(id);
+            const browserHandlers = {};
+            const timers = new Set();
+            const player = { paused: true, currentTime: 4, playbackRate: 1, pause() { this.paused = true; }, play() { this.paused = false; return Promise.resolve(); } };
+            const context = vm.createContext({
+                remoteControlActive: false, isSeeking: false, wasPlaying: false, seekMultiplier: 1, seekInterval: null, seekDirection: 'ff', sessionBusy: false, cutPending: false,
+                player, clipReady: () => true, updatePlaybackReadout() {}, logMessage() {},
+                setInterval() { const timer = {}; timers.add(timer); return timer; }, clearInterval: timer => timers.delete(timer),
+                document: { getElementById: () => ({ classList: { toggle() {} } }) },
+                socket: { on: (name, handler) => { browserHandlers[name] = handler; } }
+            });
+            vm.runInContext(html.match(/        function startFF\([\s\S]*?(?=        \/\/ Empfängt)/)[0], context);
+            vm.runInContext(html.match(/        socket.on\('remote_control_status',[\s\S]*?\n        \}\);/)[0], context);
+            vm.runInContext(html.match(/        socket.on\('remote_command',[\s\S]*?(?=        \/\/ --- NAVIGATION)/)[0], context);
+            client.emit = (name, data) => browserHandlers[name]?.(data);
+            return { client, context, player, timers };
+        }
+        const control = createRemoteControl();
+        const a = browserPanel('a'); const b = browserPanel('b');
+        control.add(a.client); control.add(b.client);
+        control.dispatch(command);
+        assert.equal(a.context.isSeeking, true);
+        assert.equal(a.timers.size, 1);
+        b.client.handlers.claim_remote_control();
+        control.dispatch('seek-stop');
+        assert.equal(a.context.isSeeking, false);
+        assert.equal(a.timers.size, 0);
+        assert.equal(a.player.playbackRate, 1);
+        assert.equal(b.context.isSeeking, false);
+    });
+}
