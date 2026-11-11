@@ -242,3 +242,21 @@ test('switching clips restores independent trim drafts and selecting the same cl
     vm.runInContext("loadVideo('a.mp4')", context);
     assert.equal(loads, previousLoads);
 });
+
+test('losing Companion ownership releases seeking on the previous panel', () => {
+    let handler;
+    let stops = 0;
+    vm.runInNewContext(html.match(/        socket.on\('remote_control_status',[\s\S]*?\n        \}\);/)[0], {
+        remoteControlActive: false,
+        socket: { on: (_event, callback) => { handler = callback; } },
+        stopSeek() { stops++; },
+        document: { getElementById: () => ({ classList: { toggle() {} } }) }
+    });
+    handler({ active: false });
+    assert.equal(stops, 0);
+    handler({ active: true });
+    handler({ active: false });
+    assert.equal(stops, 1);
+    handler({ active: false });
+    assert.equal(stops, 1, 'routine status updates do not interrupt backup controls');
+});

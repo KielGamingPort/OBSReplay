@@ -53,6 +53,7 @@
         let sessionBusy = false;
         let obsConnected = false;
         let lastObsConnection = null;
+        let remoteControlActive = false;
         let captureBusy = false;
         let cutPending = false;
         let matches = [];
@@ -474,6 +475,8 @@
             resetMarks();
         }
         socket.on('remote_control_status', status => {
+            if (remoteControlActive && !status.active) stopSeek();
+            remoteControlActive = status.active;
             const button = document.getElementById('remote-control');
             button.disabled = status.active;
             button.textContent = status.active ? 'Companion aktiv' : 'Companion übernehmen';
